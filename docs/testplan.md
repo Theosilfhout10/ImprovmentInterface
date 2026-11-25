@@ -56,6 +56,7 @@ Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): 
 | TC-10 | R2 | Vul `.env` met Gmail en `MAIL_TEST_ONTVANGER`, zet een status om. | Testadres ontvangt binnen een minuut een nette e-mail met status en toelichting. | *Uit te voeren door Theo met eigen Gmail* |
 | TC-11 | NF2 | Online: log in als medewerker en probeer via de browserconsole `wijzig_status` aan te roepen. | Database weigert: "Alleen de stuurgroep mag ...". | Geslaagd (databasetest `tests/supabase/test.sql`) |
 | TC-12 | R2, R5 | Online op drie apparaten: medewerker dient in, stuurgroep beoordeelt en keurt goed, management kijkt mee. | Elk apparaat toont de wijziging binnen enkele seconden zonder verversen; indiener krijgt een melding. | Geslaagd (Theo, 25-11-2026): "ik zie direct alles verschijnen" |
+| TC-13 | NF2 | Online: open de app zonder in te loggen en vraag via de API de voorstellen op; log in met een fout wachtwoord. | API geeft "permission denied"; foutmelding verraadt niet of het e-mailadres bestaat; knop 3 s geblokkeerd. | Geslaagd (25-11-2026) |
 | TC-08 | NF2 | Dien een voorstel in met titel `<script>alert(1)</script>`. | Tekst wordt letterlijk getoond, er verschijnt geen pop-up. | Geslaagd |
 | TC-09 | NF3 | Open de app op een telefoon (390 px breed) en bedien het formulier met alleen het toetsenbord. | Geen horizontaal scrollen; alle velden bereikbaar met Tab. | Deels: 390 px zonder horizontaal scrollen; toetsenbordbediening nog handmatig controleren |
 
