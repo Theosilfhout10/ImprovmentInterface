@@ -37,7 +37,19 @@ Kan het proces uit het projectplan (indienen → wekelijks beoordelen → terugk
 **Betekenis voor het vervolg naar MVP**
 Platformkeuze voor gedeelde opslag, login via Microsoft 365 en echte meldingen (e-mail/Teams) worden de belangrijkste onderdelen van het Plan van Aanpak.
 
-## Iteratie 2 – na feedback stuurgroep en testers (in te vullen)
+## Iteratie 2 – kwaliteit op basis van de vibecoding-training (25-11-2026)
+
+**Doel:** het prototype toetsen aan de kwaliteitsattributen en engineeringtechnieken uit de training *Softwareontwikkeling & Vibecoding*.
+
+**Wat is aangepast**
+- Rolcontrole verplaatst van alleen de schermen naar de logica: een verborgen knop is geen beveiliging.
+- 3 extra tests: autorisatie, rare invoer, performance bij 1.000 voorstellen (18 in totaal).
+- Mini-specificatie voor de AI ([spec.md](spec.md)), promptlog ([promptlog.md](promptlog.md)), acceptatiecriteria als Gegeven/Als/Dan en een kwaliteitsanalyse met de route naar productie ([kwaliteit.md](kwaliteit.md)).
+- Werkwijze: deze wijziging loopt via een pull request, zodat er een code review plaatsvindt vóór samenvoegen.
+
+**Geleerd:** de training benadrukt dat vibecoding sterk is voor de eerste versie, maar dat productie expliciete keuzes vraagt over security, data en beheer. Die keuzes staan nu zichtbaar in de documentatie in plaats van alleen in mijn hoofd.
+
+## Iteratie 3 – na feedback stuurgroep en testers (in te vullen)
 
 **Doel:**
 **Feedback ontvangen van (wie, wanneer):**

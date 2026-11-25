@@ -53,6 +53,9 @@ docs/                 Ontwerp, ERD, testplan en iteratielog
 - [Testplan en testresultaten](docs/testplan.md)
 - [Iteratielog](docs/iteratielog.md)
 - [Demoscript (5 minuten)](docs/demoscript.md)
+- [Specificatie voor AI (spec-driven)](docs/spec.md)
+- [Promptlog en AI-transparantie](docs/promptlog.md)
+- [Kwaliteitsanalyse en route naar productie](docs/kwaliteit.md)
 
 ## Bewuste keuzes en beperkingen van dit prototype
 
@@ -63,4 +66,4 @@ docs/                 Ontwerp, ERD, testplan en iteratielog
 
 ## AI-gebruik
 
-De code is gegenereerd met hulp van AI (Claude) volgens de vibecoding-aanpak uit de module. Zie [docs/iteratielog.md](docs/iteratielog.md) voor wat er per iteratie is gevraagd, gecontroleerd en aangepast.
+De code is gegenereerd met hulp van AI (Claude) volgens de vibecoding-aanpak uit de module. Zie [docs/promptlog.md](docs/promptlog.md) en [docs/iteratielog.md](docs/iteratielog.md) voor wat er per iteratie is gevraagd, gecontroleerd en aangepast.
