@@ -1,6 +1,7 @@
 # Publiceert de map public/ op GitHub Pages bij elke push naar main.
-# GitHub Pages host alleen statische bestanden: de app draait daar als demo in de browser
-# (voorbeelddata per bezoeker, geen server en geen e-mail).
+# GitHub Pages host alleen statische bestanden. Met public/js/config.js ingevuld gebruikt de app
+# Supabase (inloggen, gedeelde data, live); anders draait hij als demo in de browser.
+# Twee jobs (bouwen, dan publiceren): het artefact is pas betrouwbaar vindbaar als de bouw-job klaar is.
 name: GitHub Pages
 on:
   push:
@@ -14,11 +15,8 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,5 +27,12 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
