@@ -47,8 +47,9 @@ erDiagram
     MEDEWERKER {
         string id PK
         string naam
-        string email
+        string email "uniek; koppelt het inlogaccount"
         string rol "medewerker | stuurgroep | management"
+        uuid authUserId "optioneel: Supabase-account (iteratie 4)"
     }
     CATEGORIE {
         string id PK
@@ -99,6 +100,8 @@ erDiagram
         datetime datum
     }
 ```
+
+> **Iteratie 4:** het datamodel blijft 6 entiteiten. Het inlogaccount (e-mail + wachtwoord) staat in de ingebouwde accounttabel van Supabase (`auth.users`); dat is infrastructuur, geen entiteit van het domein. `MEDEWERKER.authUserId` legt de koppeling, op basis van het e-mailadres. Zo bepaalt de database bij elke actie wie je bent en welke rol je hebt.
 
 ### Toelichting op ontwerpkeuzes
 
