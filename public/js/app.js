@@ -157,11 +157,13 @@
   }
 
   const ROL_NAAM = { medewerker: 'Medewerker', stuurgroep: 'Stuurgroep', management: 'Management' };
-  const DEMO_ACCOUNTS = [
-    { rol: 'medewerker', email: 'medewerker@verbeterregistratie.test', wat: 'Dient voorstellen in en volgt wat ermee gebeurt.' },
-    { rol: 'stuurgroep', email: 'stuurgroep@verbeterregistratie.test', wat: 'Beoordeelt voorstellen en wijzigt de status.' },
-    { rol: 'management', email: 'management@verbeterregistratie.test', wat: 'Ziet het dashboard: wat er speelt en wat blijft liggen.' },
+  // Uitleg van de rollen op het inlogscherm. Bewust zonder e-mailadressen: wie inlogt, krijgt die van de beheerder.
+  const ROL_UITLEG = [
+    { rol: 'medewerker', wat: 'Dient voorstellen in en volgt wat ermee gebeurt.' },
+    { rol: 'stuurgroep', wat: 'Beoordeelt voorstellen en wijzigt de status.' },
+    { rol: 'management', wat: 'Ziet het dashboard: wat er speelt en wat blijft liggen.' },
   ];
+  const WACHTTIJD_NA_FOUT = 3000; // ms; remt raden van wachtwoorden in de app (de echte rem zit in Supabase: rate limits)
 
   let bron;
   let data = null;
@@ -353,17 +355,13 @@
         </form>
         ${config.demoModus ? `
         <section class="groep">
-          <h2 class="groep-titel">Demo-accounts, één per rol</h2>
-          <div class="kaart"><ul class="lijst">${DEMO_ACCOUNTS.map(a => `<li><button type="button" class="rij" data-demo-email="${esc(a.email)}">
-            <span class="rij-tekst"><span class="rij-titel"><span class="rol-chip rol-${a.rol}">${ROL_NAAM[a.rol]}</span></span><span class="rij-meta">${esc(a.wat)}</span><span class="rij-meta">${esc(a.email)}</span></span>${CHEVRON}</button></li>`).join('')}</ul></div>
-          <p class="groep-voet">Tik op een rol om het e-mailadres in te vullen. Het wachtwoord krijg je van de beheerder.</p>
+          <h2 class="groep-titel">Drie rollen</h2>
+          <div class="kaart"><ul class="lijst">${ROL_UITLEG.map(a => `<li><div class="rij" style="cursor:default">
+            <span class="rij-tekst"><span class="rij-titel"><span class="rol-chip rol-${a.rol}">${ROL_NAAM[a.rol]}</span></span><span class="rij-meta">${esc(a.wat)}</span></span></div></li>`).join('')}</ul></div>
+          <p class="groep-voet">Je inloggegevens krijg je van de beheerder.</p>
         </section>` : ''}
       </div>`;
     const form = $('#loginForm');
-    document.querySelectorAll('[data-demo-email]').forEach(knop => knop.addEventListener('click', () => {
-      form.email.value = knop.dataset.demoEmail;
-      form.wachtwoord.focus();
-    }));
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const knop = form.querySelector('[type=submit]');
@@ -377,6 +375,10 @@
         if (/niet gekoppeld/.test(err.message)) await bron.uitloggen().catch(() => {});
         toonLogin(err.message);
         $('#l-email').value = email;
+        // Na een mislukte poging de knop even blokkeren (het wachtwoord wordt nergens bewaard).
+        const opnieuw = $('#loginForm [type=submit]');
+        opnieuw.disabled = true;
+        setTimeout(() => { opnieuw.disabled = false; }, WACHTTIJD_NA_FOUT);
       }
     });
   }

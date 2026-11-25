@@ -45,6 +45,13 @@ Eenmalig instellen in het Supabase-dashboard:
 
 Let op: een gratis Supabase-project pauzeert na 7 dagen zonder gebruik. Open het dashboard en klik *Restore* vóór een demo.
 
+**Instellingen tegen het raden van wachtwoorden** (Supabase-dashboard, eenmalig):
+- *Authentication → Sign In / Providers → Email*: minimale wachtwoordlengte **12** en eis kleine letters, hoofdletters, cijfers en symbolen. Bestaande wachtwoorden die korter zijn: opnieuw instellen.
+- *Authentication → Rate Limits*: laat de limiet voor inlogpogingen per IP-adres op de standaardwaarde of lager (Supabase remt dan automatisch).
+- Na elke demo met externen: wachtwoorden van de demo-accounts wijzigen.
+
+Wachtwoorden staan nergens in de code of in GitHub. Supabase bewaart ze alleen versleuteld (gehasht); de app bewaart na het inloggen alleen een tijdelijk sessietoken in de browser, nooit het wachtwoord.
+
 **Beveiliging:** de publishable key is openbaar bedoeld. De bescherming zit in de database: gebruikers mogen alleen lezen (en alleen hun eigen berichten), en alle wijzigingen lopen via functies die de rol en de procesregels controleren (`supabase/schema.sql`). Een medewerker kan dus ook via de API geen status wijzigen.
 
 ## E-mail instellen (Gmail)
