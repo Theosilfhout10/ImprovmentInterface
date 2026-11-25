@@ -156,14 +156,14 @@ Indeling volgt het projectplan: 3 sprints van 2 weken, max. 2 uur per dag.
 Volgens ATDD/BDD uit de vibecoding-training: eerst gedrag vastleggen, dan bouwen. Elk scenario heeft een geautomatiseerde test of een testgeval.
 
 **Kernfunctie 1: indienen**
-- *Gegeven* een ingelogde medewerker, *als* hij titel, omschrijving en categorie invult en indient, *dan* staat het voorstel op "Ingediend" en krijgt hij een ontvangstbevestiging. (test R1, TC-02)
-- *Gegeven* een leeg formulier, *als* de medewerker indient, *dan* ziet hij per ontbrekend veld een melding en wordt er niets opgeslagen. (test R1, TC-01)
+- *Gegeven* een ingelogde medewerker, *als* de medewerker titel, omschrijving en categorie invult en indient, *dan* staat het voorstel op "Ingediend" en krijgt de medewerker een ontvangstbevestiging. (test R1, TC-02)
+- *Gegeven* een leeg formulier, *als* de medewerker indient, *dan* ziet de medewerker per ontbrekend veld een melding en wordt er niets opgeslagen. (test R1, TC-01)
 
 **Kernfunctie 2: beoordelen en terugkoppelen**
 - *Gegeven* een voorstel in beoordeling, *als* de stuurgroep impact hoog, urgentie hoog en inzet middel kiest, *dan* toont de app prioriteit Hoog (score 8). (test R3, TC-03)
 - *Gegeven* een voorstel, *als* de stuurgroep afwijst zonder toelichting, *dan* wordt dat geweigerd met de melding dat de indiener moet weten waarom. (test R2, TC-05)
 - *Gegeven* een voorstel van Theo, *als* de stuurgroep de status wijzigt, *dan* krijgt Theo automatisch een bericht met de nieuwe status en de toelichting. (test R2)
-- *Gegeven* een medewerker zonder stuurgroeprol, *als* hij probeert te beoordelen of de status te wijzigen, *dan* wordt dat geweigerd. (test NF2)
+- *Gegeven* een medewerker zonder stuurgroeprol, *als* die medewerker probeert te beoordelen of de status te wijzigen, *dan* wordt dat geweigerd. (test NF2)
 
 **Kernfunctie 3: dashboard**
 - *Gegeven* een voorstel dat langer dan 7 dagen op "Ingediend" staat, *als* management het dashboard opent, *dan* staat het onder "Aandacht nodig". (test R4, TC-06)
