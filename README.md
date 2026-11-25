@@ -21,6 +21,26 @@ Open daarna http://localhost:3000. Kies rechtsboven wie je bent:
 
 De data staat op de server in `data/vbr.json` (niet in GitHub), dus iedereen die de app opent ziet dezelfde voorstellen. Open je `public/index.html` los zonder server, dan draait de app als demo in je browser.
 
+## Live demo met drie accounts (Supabase)
+
+De online versie (GitHub Pages) gebruikt [Supabase](https://supabase.com) (gratis): echte inlogaccounts, één gedeelde database en live updates. Wijzigt de stuurgroep een status, dan ziet de indiener dat binnen een seconde op een ander apparaat, inclusief bericht.
+
+Eenmalig instellen in het Supabase-dashboard:
+
+1. **SQL Editor** → plak de inhoud van [`supabase/installatie.sql`](supabase/installatie.sql) → *Run*. Dit maakt de tabellen, de rechten per rol, de live updates en de demodata. Opnieuw uitvoeren mag (zet alles terug naar de demodata).
+2. **Authentication → Users → Add user → Create new user**, drie keer, met *Auto Confirm User* aan en een wachtwoord naar keuze:
+   - `medewerker@verbeterregistratie.test` (Theo Silfhout, medewerker)
+   - `stuurgroep@verbeterregistratie.test` (Olaf van Heeswijk, stuurgroep)
+   - `management@verbeterregistratie.test` (Haico de Boer, management)
+
+   Een account wordt via het e-mailadres automatisch aan de medewerker gekoppeld.
+3. **Authentication → Sign In / Providers**: zet *Allow new users to sign up* uit, zodat niemand zelf een account kan maken.
+4. Zet de Project URL en de **publishable (anon) key** in [`public/js/config.js`](public/js/config.js). Nooit de service_role/secret key of het databasewachtwoord.
+
+Let op: een gratis Supabase-project pauzeert na 7 dagen zonder gebruik. Open het dashboard en klik *Restore* vóór een demo.
+
+**Beveiliging:** de publishable key is openbaar bedoeld. De bescherming zit in de database: gebruikers mogen alleen lezen (en alleen hun eigen berichten), en alle wijzigingen lopen via functies die de rol en de procesregels controleren (`supabase/schema.sql`). Een medewerker kan dus ook via de API geen status wijzigen.
+
 ## E-mail instellen (Gmail)
 
 Zonder instellingen staat de e-mail in **voorbeeldstand**: mails worden opgesteld maar niet verstuurd. Je ziet ze via *Verzonden e-mails* onderaan de app.
@@ -84,7 +104,8 @@ docs/                 Ontwerp, testplan, iteratielog, kwaliteit, promptlog
 
 ## Bewuste keuzes en beperkingen
 
-- **Nog geen echte login.** Je kiest wie je bent uit een lijst. Voor livegang komt Microsoft 365-login (Entra ID). Tot die tijd alleen op het interne netwerk gebruiken.
+- **Login.** Online (Supabase) log je in met e-mail en wachtwoord. In de Node-versie kies je nog wie je bent uit een lijst; die alleen op het interne netwerk gebruiken. Voor productie: Microsoft 365-login (Entra ID), die Supabase ook ondersteunt.
+- **Online versie mailt (nog) niet.** Berichten verschijnen live in de app; e-mail loopt via de Node-server.
 - **Opslag in één JSON-bestand.** Ruim voldoende voor ~20 gebruikers; maak een back-up door `data/vbr.json` te kopiëren.
 - **Geen koppeling met Freshservice.** Dat valt buiten de scope (projectplan, afbakening).
 

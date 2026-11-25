@@ -244,8 +244,32 @@ a { color: var(--tint); }
 .voet { padding-block: 8px 28px; font-size: 13px; color: var(--tekst-3); display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; align-items: center; text-align: center; }
 .voet .tekstknop { font-size: 13px; }
 
+
+/* ---------- Account en rol (online met inloggen) ---------- */
+.account { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.account-tekst { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.account-naam { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account .tekstknop { font-size: 14px; white-space: nowrap; }
+.rol-chip {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  letter-spacing: .02em; white-space: nowrap; color: var(--grijs); background: color-mix(in srgb, var(--grijs) 14%, transparent);
+}
+.rol-chip.rol-medewerker { color: var(--blauw); background: color-mix(in srgb, var(--blauw) 13%, transparent); }
+.rol-chip.rol-stuurgroep { color: var(--merk); background: color-mix(in srgb, var(--merk) 12%, transparent); }
+.rol-chip.rol-management { color: var(--paars); background: color-mix(in srgb, var(--paars) 14%, transparent); }
+
+.login { width: 100%; max-width: 440px; margin: 0 auto; display: grid; gap: 24px; }
+.login-fout { margin: 0; color: var(--rood); font-size: 14px; font-weight: 500; }
+.login .rij-tekst { gap: 2px; }
+.groep-voet { margin: 8px 4px 0; font-size: 13px; color: var(--tekst-3); }
+
+.live { display: inline-flex; align-items: center; gap: 6px; }
+.live .stip { width: 7px; height: 7px; border-radius: 50%; background: var(--tekst-3); }
+.live.aan .stip { background: var(--groen); box-shadow: 0 0 0 3px color-mix(in srgb, var(--groen) 22%, transparent); }
+
 @media (max-width: 640px) {
   .app-naam { display: none; }
+  .account-naam { display: none; }
   .cijfers { grid-template-columns: 1fr 1fr; }
   .cijfer:nth-child(3) { border-left: 0; }
   .cijfer:nth-child(n+3) { border-top: 1px solid var(--lijn); }

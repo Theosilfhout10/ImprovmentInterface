@@ -54,6 +54,8 @@ Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): 
 | TC-06 | R4 | Als Haico: open Dashboard. | Tegels en grafieken kloppen met de data; voorstel > 7 dagen zonder reactie wordt gesignaleerd. | Geslaagd |
 | TC-07 | NF1 | Laat een tester zonder uitleg een voorstel indienen; meet de tijd. | Binnen 5 minuten, zonder hulp. | *Nog uit te voeren met testers* |
 | TC-10 | R2 | Vul `.env` met Gmail en `MAIL_TEST_ONTVANGER`, zet een status om. | Testadres ontvangt binnen een minuut een nette e-mail met status en toelichting. | *Uit te voeren door Theo met eigen Gmail* |
+| TC-11 | NF2 | Online: log in als medewerker en probeer via de browserconsole `wijzig_status` aan te roepen. | Database weigert: "Alleen de stuurgroep mag ...". | Geslaagd (databasetest `tests/supabase/test.sql`) |
+| TC-12 | R2, R5 | Online op drie apparaten: medewerker dient in, stuurgroep beoordeelt en keurt goed, management kijkt mee. | Elk apparaat toont de wijziging binnen enkele seconden zonder verversen; indiener krijgt een melding. | *Uit te voeren door Theo* |
 | TC-08 | NF2 | Dien een voorstel in met titel `<script>alert(1)</script>`. | Tekst wordt letterlijk getoond, er verschijnt geen pop-up. | Geslaagd |
 | TC-09 | NF3 | Open de app op een telefoon (390 px breed) en bedien het formulier met alleen het toetsenbord. | Geen horizontaal scrollen; alle velden bereikbaar met Tab. | Deels: 390 px zonder horizontaal scrollen; toetsenbordbediening nog handmatig controleren |
 
@@ -72,7 +74,7 @@ Validatievragen na afloop: *Zou je dit echt gebruiken? Wat houdt je tegen? Wat m
 
 ## 5. Bekende beperkingen (input voor vervolg naar MVP)
 
-- Geen echte authenticatie: iedereen kan in het prototype elke rol kiezen.
-- Data staat per browser (`localStorage`), dus niet gedeeld tussen collega's.
+- Authenticatie alleen in de online versie (Supabase, e-mail + wachtwoord); voor productie Microsoft 365-login.
+- De online versie verstuurt geen e-mail (alleen berichten in de app).
 - Berichten verschijnen alleen in de app, niet per e-mail of Teams.
 - Geen capaciteitscontrole per week (de stuurgroep kiest zelf de week).

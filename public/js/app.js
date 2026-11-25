@@ -17,8 +17,11 @@
   /*
    * Adapter-patroon: de schermen roepen altijd dezelfde functies aan (bron.dienIn, bron.wijzigStatus, ...).
    *  - ServerBron: de echte situatie. Data staat op de server, e-mails gaan via de server.
-   *  - LokaleBron: als er geen server is (bestand los geopend of de online preview). Data staat dan
-   *    alleen in deze browser en er wordt niets gemaild.
+   *  - SupabaseBron: de online versie (GitHub Pages) met echte accounts. Data staat in een gedeelde
+   *    Supabase-database, wijzigingen komen live binnen op alle apparaten. De bedrijfsregels en
+   *    rolcontrole zitten in de database zelf (supabase/schema.sql), niet alleen in de browser.
+   *  - LokaleBron: als er geen server en geen Supabase is (bestand los geopend of de preview). Data
+   *    staat dan alleen in deze browser en er wordt niets gemaild.
    */
   const GEBRUIKER_SLEUTEL = 'vbr-gebruiker';
   const OPSLAG_SLEUTEL = 'vbr-data-v1';
@@ -65,8 +68,106 @@
     };
   }
 
+  // Officiële Supabase-bibliotheek (UMD-build, MIT-licentie), meegeleverd zodat de app niet van een CDN afhangt.
+  const SUPABASE_JS = 'js/vendor/supabase-2.86.2.js';
+  const LIVE_TABELLEN = ['voorstel', 'beoordeling', 'statuswijziging', 'notificatie'];
+
+  function laadScript(src) {
+    return new Promise((klaar, mislukt) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = klaar;
+      s.onerror = () => mislukt(new Error('De verbinding met de database kon niet worden geladen. Controleer je internetverbinding.'));
+      document.head.appendChild(s);
+    });
+  }
+
+  /** Vertaalt technische foutmeldingen naar begrijpelijk Nederlands. Meldingen uit de database zijn al Nederlands. */
+  function vertaalFout(fout) {
+    const m = (fout && fout.message) || String(fout || '');
+    if (/invalid login credentials/i.test(m)) return 'E-mailadres of wachtwoord klopt niet.';
+    if (/email not confirmed/i.test(m)) return 'Dit account is nog niet bevestigd. Vink bij het aanmaken "Auto Confirm User" aan.';
+    if (/failed to fetch|networkerror|load failed/i.test(m)) return 'Geen verbinding met de database. Controleer je internetverbinding.';
+    if (/jwt/i.test(m)) return 'Je sessie is verlopen. Log opnieuw in.';
+    return m || 'Er ging iets mis. Probeer het opnieuw.';
+  }
+
+  async function SupabaseBron(config) {
+    if (!window.supabase) await laadScript(SUPABASE_JS);
+    const sb = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    });
+    const controleer = ({ data: d, error }) => { if (error) throw new Error(vertaalFout(error)); return d; };
+    const rpc = (naam, args) => sb.rpc(naam, args).then(controleer);
+    const lees = (tabel, kolommen) => sb.from(tabel).select(kolommen || '*').then(controleer);
+    // De database gebruikt snake_case (ingediend_op), de app camelCase (ingediendOp); tijden als ISO-tekst.
+    const naarApp = rij => {
+      const uit = {};
+      Object.entries(rij).forEach(([k, w]) => { uit[k.replace(/_([a-z])/g, (_, l) => l.toUpperCase())] = w; });
+      ['datum', 'ingediendOp'].forEach(k => { if (uit[k]) uit[k] = new Date(uit[k]).toISOString(); });
+      return uit;
+    };
+    let kanaal = null;
+    return {
+      soort: 'supabase',
+      async sessie() { const { data: d } = await sb.auth.getSession(); return d.session; },
+      async login(email, wachtwoord) { controleer(await sb.auth.signInWithPassword({ email, password: wachtwoord })); },
+      async uitloggen() {
+        if (kanaal) { await sb.removeChannel(kanaal); kanaal = null; }
+        await sb.auth.signOut();
+      },
+      bijAfmelden(fn) { sb.auth.onAuthStateChange(gebeurtenis => { if (gebeurtenis === 'SIGNED_OUT') fn(); }); },
+      async laad() {
+        const [ik, medewerkers, categorieen, voorstellen, beoordelingen, statuswijzigingen, notificaties] = await Promise.all([
+          rpc('huidige_medewerker'),
+          lees('medewerker', 'id, naam, rol'),
+          lees('categorie'),
+          lees('voorstel'),
+          lees('beoordeling'),
+          lees('statuswijziging'),
+          lees('notificatie'), // de database geeft alleen je eigen berichten terug (Row Level Security)
+        ]);
+        const mij = Array.isArray(ik) ? ik[0] : ik;
+        if (!mij || !mij.id) throw new Error('Je account is nog niet gekoppeld aan een medewerker. Vraag de beheerder om je e-mailadres toe te voegen.');
+        return {
+          gebruikerId: mij.id,
+          mail: { stand: 'geen' },
+          demoModus: !!config.demoModus,
+          data: {
+            medewerkers, categorieen,
+            voorstellen: voorstellen.map(naarApp), beoordelingen: beoordelingen.map(naarApp),
+            statuswijzigingen: statuswijzigingen.map(naarApp), notificaties: notificaties.map(naarApp),
+          },
+        };
+      },
+      dienIn: i => rpc('dien_voorstel_in', { p_titel: i.titel, p_omschrijving: i.omschrijving, p_categorie_id: i.categorieId, p_klant: i.klant || '', p_opbrengst: i.opbrengst || '' }).then(naarApp),
+      beoordeel: (id, i) => rpc('sla_beoordeling_op', { p_voorstel_id: id, p_impact: i.impact, p_urgentie: i.urgentie, p_inzet: i.inzet, p_gepland_week: i.geplandeWeek || '', p_notitie: i.notitie || '' }),
+      wijzigStatus: (id, naar, toelichting) => rpc('wijzig_status', { p_voorstel_id: id, p_naar: naar, p_toelichting: toelichting || '' }),
+      markeerGelezen: ids => rpc('markeer_gelezen', { p_ids: ids }),
+      postvak: async () => [],
+      reset: () => rpc('reset_demo'),
+      /** Live: bij elke wijziging in de database roept Supabase bijWijziging aan, op alle open apparaten. */
+      volg(bijWijziging, bijStatus) {
+        if (kanaal) return;
+        kanaal = sb.channel('vbr-live');
+        LIVE_TABELLEN.forEach(tabel => kanaal.on('postgres_changes', { event: '*', schema: 'public', table: tabel }, bijWijziging));
+        kanaal.subscribe(status => bijStatus(status));
+      },
+    };
+  }
+
+  const ROL_NAAM = { medewerker: 'Medewerker', stuurgroep: 'Stuurgroep', management: 'Management' };
+  const DEMO_ACCOUNTS = [
+    { rol: 'medewerker', email: 'medewerker@verbeterregistratie.test', wat: 'Dient voorstellen in en volgt wat ermee gebeurt.' },
+    { rol: 'stuurgroep', email: 'stuurgroep@verbeterregistratie.test', wat: 'Beoordeelt voorstellen en wijzigt de status.' },
+    { rol: 'management', email: 'management@verbeterregistratie.test', wat: 'Ziet het dashboard: wat er speelt en wat blijft liggen.' },
+  ];
+
   let bron;
   let data = null;
+  let liveStatus = '';
+  let vensterSoort = null;      // 'voorstel' | 'berichten' | 'postvak'
+  let vensterAangeraakt = false; // iemand heeft in het open venster iets ingevuld: dan niet live overschrijven
   let mailInfo = { stand: 'geen' };
   let demoModus = true;
   let huidigeGebruikerId = (() => { try { return localStorage.getItem(GEBRUIKER_SLEUTEL); } catch (e) { return null; } })();
@@ -74,21 +175,25 @@
   let beoordeelFilter = 'Te beoordelen';
   let openVoorstelId = null;
 
+  /** Volgorde: eigen Node-server (lokaal of intern) > Supabase (online met accounts) > demo in de browser. */
   async function kiesBron() {
     if (location.protocol.startsWith('http')) {
       try {
         const s = ServerBron();
         await s.laad();
         return s;
-      } catch (e) { /* geen server bereikbaar: val terug op de lokale demo */ }
+      } catch (e) { /* geen server bereikbaar */ }
     }
+    const config = window.VBR_CONFIG || {};
+    if (config.supabaseUrl && config.supabaseAnonKey) return SupabaseBron(config);
     return LokaleBron();
   }
 
   async function herlaad() {
     const r = await bron.laad();
     data = r.data; mailInfo = r.mail || mailInfo; demoModus = r.demoModus;
-    if (!data.medewerkers.some(m => m.id === huidigeGebruikerId)) huidigeGebruikerId = data.medewerkers[0].id;
+    if (r.gebruikerId) huidigeGebruikerId = r.gebruikerId; // ingelogd: de gebruiker volgt uit het account
+    else if (!data.medewerkers.some(m => m.id === huidigeGebruikerId)) huidigeGebruikerId = data.medewerkers[0].id;
   }
 
   // ===== 2. Hulpfuncties ====================================================
@@ -153,10 +258,23 @@
     return basis;
   }
 
+  const mijnOngelezen = () => data.notificaties.filter(n => n.ontvangerId === huidigeGebruikerId && !n.gelezen);
+
   function tekenKop() {
-    $('#gebruikerKeuze').innerHTML = data.medewerkers.map(m =>
-      `<option value="${esc(m.id)}"${m.id === huidigeGebruikerId ? ' selected' : ''}>${esc(m.naam)}</option>`).join('');
-    const ongelezen = data.notificaties.filter(n => n.ontvangerId === huidigeGebruikerId && !n.gelezen).length;
+    $('.kop-acties').hidden = false;
+    const metAccount = bron.soort === 'supabase';
+    $('.gebruiker').hidden = metAccount;   // demo: wissel van persoon met de keuzelijst
+    $('#account').hidden = !metAccount;    // online: je bent wie je bent, met je rol zichtbaar in de kop
+    if (metAccount) {
+      const g = gebruiker();
+      $('#accountNaam').textContent = g.naam;
+      $('#accountRol').textContent = ROL_NAAM[g.rol] || g.rol;
+      $('#accountRol').className = 'rol-chip rol-' + g.rol;
+    } else {
+      $('#gebruikerKeuze').innerHTML = data.medewerkers.map(m =>
+        `<option value="${esc(m.id)}"${m.id === huidigeGebruikerId ? ' selected' : ''}>${esc(m.naam)}</option>`).join('');
+    }
+    const ongelezen = mijnOngelezen().length;
     const teller = $('#belTeller');
     teller.textContent = ongelezen > 9 ? '9+' : ongelezen;
     teller.hidden = ongelezen === 0;
@@ -171,6 +289,9 @@
   function tekenVoet() {
     const delen = [];
     if (bron.soort === 'lokaal') delen.push('<span>Demo in de browser: gegevens blijven op dit apparaat</span>');
+    else if (bron.soort === 'supabase') delen.push(liveStatus === 'SUBSCRIBED'
+      ? '<span class="live aan"><span class="stip"></span>Live: wijzigingen verschijnen direct op alle apparaten</span>'
+      : '<span class="live"><span class="stip"></span>Verbinden voor live updates…</span>');
     else if (mailInfo.stand === 'gmail') delen.push(`<span>E-mail actief${mailInfo.testOntvanger ? ' (testadres)' : ''}</span>`);
     else delen.push('<span>E-mail in voorbeeldstand</span>');
     if (demoModus && bron.soort === 'server') delen.push('<button type="button" class="tekstknop" data-actie="postvak">Verzonden e-mails</button>');
@@ -178,11 +299,98 @@
     $('#voet').innerHTML = delen.join('');
   }
 
+  const SCHERMEN = { indienen: () => schermIndienen(), mijn: () => schermMijn(), beoordelen: () => schermBeoordelen(), dashboard: () => schermDashboard() };
   function toon(scherm) {
     if (scherm) huidigScherm = scherm;
     tekenKop();
     tekenVoet();
-    ({ indienen: schermIndienen, mijn: schermMijn, beoordelen: schermBeoordelen, dashboard: schermDashboard })[huidigScherm]();
+    SCHERMEN[huidigScherm]();
+  }
+
+  // ===== Live verversen ======================================================
+  /*
+   * Een wijziging van een collega (op een ander apparaat) komt binnen via Supabase Realtime.
+   * We halen dan de data opnieuw op en tekenen het scherm opnieuw, behalve waar iemand aan het typen is:
+   * dan worden alleen de kop (berichtenteller) en de voet bijgewerkt, zodat er geen invoer verloren gaat.
+   */
+  let verversTimer;
+  function planVerversing() { clearTimeout(verversTimer); verversTimer = setTimeout(verversLive, 350); }
+  const aanHetTypen = () => !!document.activeElement && document.activeElement.matches('input:not([type=radio]), textarea');
+
+  async function verversLive() {
+    if (!data) return; // niet ingelogd
+    const alGezien = new Set(mijnOngelezen().map(n => n.id));
+    try { await herlaad(); } catch (e) { return; } // bij de volgende wijziging of poging opnieuw
+    tekenKop();
+    tekenVoet();
+    if (huidigScherm !== 'indienen' && !aanHetTypen()) SCHERMEN[huidigScherm]();
+    if ($('#venster').open && !vensterAangeraakt && !aanHetTypen()) {
+      if (vensterSoort === 'voorstel' && openVoorstelId) openVoorstel(openVoorstelId);
+      if (vensterSoort === 'berichten') openBerichten();
+    }
+    const nieuw = mijnOngelezen().filter(n => !alGezien.has(n.id)).sort((a, b) => b.datum.localeCompare(a.datum));
+    if (nieuw.length) toonMelding(nieuw.length === 1 ? nieuw[0].bericht : `${nieuw.length} nieuwe berichten`);
+  }
+
+  // ===== Inloggen (alleen online met Supabase) ==============================
+  function toonLogin(fout) {
+    data = null;
+    sluitVenster();
+    $('.kop-acties').hidden = true;
+    $('#menu').innerHTML = '';
+    $('#voet').innerHTML = '<span>Verbeterregistratie · Egency</span>';
+    const config = window.VBR_CONFIG || {};
+    $('#inhoud').innerHTML = `
+      <div class="login">
+        <div class="paginakop"><h1>Inloggen</h1><p>Wat je ziet en wat je mag, hangt af van je rol.</p></div>
+        <form id="loginForm" class="formulier" novalidate>
+          <div class="kaart velden">
+            <div class="veld"><label for="l-email">E-mailadres</label><input id="l-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false"></div>
+            <div class="veld"><label for="l-wachtwoord">Wachtwoord</label><input id="l-wachtwoord" name="wachtwoord" type="password" autocomplete="current-password"></div>
+          </div>
+          ${fout ? `<p class="login-fout" role="alert">${esc(fout)}</p>` : ''}
+          <button class="knop breed" type="submit">Inloggen</button>
+        </form>
+        ${config.demoModus ? `
+        <section class="groep">
+          <h2 class="groep-titel">Demo-accounts, één per rol</h2>
+          <div class="kaart"><ul class="lijst">${DEMO_ACCOUNTS.map(a => `<li><button type="button" class="rij" data-demo-email="${esc(a.email)}">
+            <span class="rij-tekst"><span class="rij-titel"><span class="rol-chip rol-${a.rol}">${ROL_NAAM[a.rol]}</span></span><span class="rij-meta">${esc(a.wat)}</span><span class="rij-meta">${esc(a.email)}</span></span>${CHEVRON}</button></li>`).join('')}</ul></div>
+          <p class="groep-voet">Tik op een rol om het e-mailadres in te vullen. Het wachtwoord krijg je van de beheerder.</p>
+        </section>` : ''}
+      </div>`;
+    const form = $('#loginForm');
+    document.querySelectorAll('[data-demo-email]').forEach(knop => knop.addEventListener('click', () => {
+      form.email.value = knop.dataset.demoEmail;
+      form.wachtwoord.focus();
+    }));
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const knop = form.querySelector('[type=submit]');
+      const email = form.email.value.trim(), wachtwoord = form.wachtwoord.value;
+      if (!email || !wachtwoord) { toonMelding('Vul je e-mailadres en wachtwoord in.', true); return; }
+      knop.disabled = true; knop.textContent = 'Bezig met inloggen…';
+      try {
+        await bron.login(email, wachtwoord);
+        await naInloggen();
+      } catch (err) {
+        if (/niet gekoppeld/.test(err.message)) await bron.uitloggen().catch(() => {});
+        toonLogin(err.message);
+        $('#l-email').value = email;
+      }
+    });
+  }
+
+  async function naInloggen() {
+    await herlaad();
+    huidigScherm = null;
+    toon();
+    bron.volg(planVerversing, status => {
+      const wasLive = liveStatus === 'SUBSCRIBED';
+      liveStatus = status;
+      if (data) tekenVoet();
+      if (status === 'SUBSCRIBED' && !wasLive) planVerversing(); // na (her)verbinden: niets gemist
+    });
   }
 
   /** Een rij in een lijst: titel, meta-regel, rechts labels en een pijltje. */
@@ -340,13 +548,15 @@
   }
 
   // ===== 5. Vensters ========================================================
-  function openVenster(titel, inhoud) {
+  function openVenster(titel, inhoud, soort) {
     const v = $('#venster');
+    vensterSoort = soort || null;
+    vensterAangeraakt = false;
     v.innerHTML = `<div class="venster-kop"><span style="width:52px"></span><h2>${esc(titel)}</h2><button type="button" class="tekstknop" data-sluit style="width:52px;text-align:right">Klaar</button></div><div class="venster-body">${inhoud}</div>`;
     if (!v.open) v.showModal();
     return v;
   }
-  function sluitVenster() { const v = $('#venster'); if (v.open) v.close(); openVoorstelId = null; }
+  function sluitVenster() { const v = $('#venster'); if (v.open) v.close(); openVoorstelId = null; vensterSoort = null; }
 
   /** Voorstel bekijken; de stuurgroep kan hier ook beoordelen en de status wijzigen. */
   function openVoorstel(voorstelId) {
@@ -398,7 +608,7 @@
         <h4 class="groep-titel">Historie</h4>
         <div class="kaart"><ol class="tijdlijn">${historie.map(s => `<li><div><strong>${esc(s.naarStatus)}</strong> · ${esc(naamVan(s.doorId))}</div>
           ${s.toelichting ? `<div class="toelichting">${esc(s.toelichting)}</div>` : ''}<div class="wanneer">${datumTijd(s.datum)}</div></li>`).join('')}</ol></div>
-      </section>`);
+      </section>`, 'voorstel');
 
     const form = venster.querySelector('#beoordeelForm');
     if (form) {
@@ -436,7 +646,7 @@
       <div class="kaart">${mijn.length ? `<ul class="lijst">${mijn.map(n => `<li><button type="button" class="bericht ${n.gelezen ? 'gelezen' : ''}" data-voorstel="${esc(n.voorstelId)}" data-notificatie="${esc(n.id)}">
         <span class="punt" aria-hidden="true"></span>
         <span class="bericht-tekst"><span>${esc(n.bericht)}</span><span class="bericht-meta">${datumTijd(n.datum)}${mailLabel[n.mail] || ''}</span></span></button></li>`).join('')}</ul>`
-        : '<div class="leeg">Nog geen berichten.</div>'}</div>`);
+        : '<div class="leeg">Nog geen berichten.</div>'}</div>`, 'berichten');
   }
 
   /** Demo: laat zien welke e-mails de server heeft verstuurd (of in voorbeeldstand zou versturen). */
@@ -445,7 +655,7 @@
     openVenster('Verzonden e-mails', `
       <p style="margin:0;color:var(--tekst-2)">${mailInfo.stand === 'gmail' ? 'Deze e-mails zijn via Gmail verzonden.' : 'Voorbeeldstand: deze e-mails zijn opgesteld maar niet verzonden. Vul het .env-bestand in om echt te mailen.'}</p>
       <div class="kaart">${lijst.length ? `<ul class="lijst">${lijst.map(m => `<li><div class="rij" style="cursor:default"><span class="rij-tekst"><span class="rij-titel">${esc(m.onderwerp)}</span><span class="rij-meta">Aan ${esc(m.aan)} · ${datumTijd(m.datum)} · ${esc(m.status)}</span></span></div><pre class="mail-tekst">${esc(m.tekst)}</pre></li>`).join('')}</ul>`
-        : '<div class="leeg">Nog geen e-mails sinds de server is gestart.</div>'}</div>`);
+        : '<div class="leeg">Nog geen e-mails sinds de server is gestart.</div>'}</div>`, 'postvak');
   }
 
   // ===== Gebeurtenissen =====================================================
@@ -467,7 +677,10 @@
     if (actie === 'allesGelezen') { await doe(() => bron.markeerGelezen([])).catch(() => {}); tekenKop(); openBerichten(); }
     if (actie === 'postvak') openPostvak().catch(err => toonMelding(err.message, true));
     if (actie === 'reset') { await doe(() => bron.reset(), 'Demodata hersteld.').catch(() => {}); sluitVenster(); toon(); }
+    if (actie === 'uitloggen') { data = null; await bron.uitloggen().catch(() => {}); liveStatus = ''; toonLogin(); }
   });
+  $('#venster').addEventListener('input', () => { vensterAangeraakt = true; });
+  $('#venster').addEventListener('change', () => { vensterAangeraakt = true; });
   $('#venster').addEventListener('click', e => { if (e.target === e.currentTarget) sluitVenster(); });
   $('#venster').addEventListener('close', () => { openVoorstelId = null; });
   $('#gebruikerKeuze').addEventListener('change', e => {
@@ -479,15 +692,25 @@
   });
   $('#belKnop').addEventListener('click', openBerichten);
 
-  // Elke 30 seconden verversen, zodat je wijzigingen van collega's ziet (niet tijdens het typen in een venster).
-  setInterval(async () => {
-    if (bron.soort !== 'server' || $('#venster').open || document.activeElement.matches('input, textarea')) return;
-    try { await herlaad(); toon(); } catch (e) { /* volgende keer opnieuw */ }
+  // Vangnet naast live updates: elke 30 seconden verversen (server), of als de live verbinding weg is (Supabase).
+  setInterval(() => {
+    if (!bron || bron.soort === 'lokaal' || (bron.soort === 'supabase' && liveStatus === 'SUBSCRIBED')) return;
+    verversLive();
   }, 30000);
+  // Telefoon uit slaapstand of tabblad weer actief: meteen bijwerken.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && bron && bron.soort !== 'lokaal') planVerversing();
+  });
 
   // ===== Start ==============================================================
   (async function start() {
     bron = await kiesBron();
+    if (bron.soort === 'supabase') {
+      bron.bijAfmelden(() => { if (data) toonLogin('Je bent uitgelogd.'); });
+      if (!(await bron.sessie())) { toonLogin(); return; }
+      try { await naInloggen(); } catch (e) { toonLogin(e.message); }
+      return;
+    }
     await herlaad();
     toon();
   })().catch(e => { $('#inhoud').innerHTML = `<div class="kaart leeg"><strong>De app kon niet laden</strong>${esc(e.message)}</div>`; });

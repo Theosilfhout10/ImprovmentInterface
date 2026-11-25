@@ -69,7 +69,28 @@ Platformkeuze voor gedeelde opslag, login via Microsoft 365 en echte meldingen (
 - Zonder echte login kan iedereen op het netwerk zich als stuurgroep voordoen. Niet op internet zetten vóór Microsoft 365-login.
 - Gmail-account is een losse afhankelijkheid; voor productie beter via de Microsoft 365-mail van Egency.
 
-## Iteratie 4 – na feedback stuurgroep en testers (in te vullen)
+## Iteratie 4 – online demo met drie accounts en live updates (25-11-2026)
+
+**Aanleiding (Theo):** "Ik wil 3 accounts hebben waarmee ik kan inloggen op de GitHub-link en een kleine demo geven waar ze echt data zien en elke rol duidelijk is. Ik wil met data op 3 verschillende apparaten live de veranderingen zien."
+
+**Afwegingen**
+- *Eigen server hosten of een dienst?* GitHub Pages kan alleen statische bestanden; de Node-server draait daar niet. Gratis Node-hosting (bijv. Render) slaapt en verliest het JSON-bestand bij een herstart. Gekozen voor Supabase (gratis): login, Postgres-database en live updates in één.
+- *Regels in de browser of in de database?* In de database. De publishable key is openbaar, dus alles wat de browser mag, mag iedereen met die key. Daarom: alleen lezen via Row Level Security, schrijven alleen via functies die rol en procesregels controleren.
+- *Live: elke paar seconden opvragen of Realtime?* Realtime (websocket): direct, en geen onnodig verkeer. Vangnet: als de verbinding wegvalt, ververst de app elke 30 seconden en direct bij terugkeer naar het tabblad.
+- *Supabase-bibliotheek van een CDN of meeleveren?* Meegeleverd (`public/js/vendor/`), vaste versie: geen afhankelijkheid van een externe server.
+
+**Wat is aangepast**
+- `supabase/schema.sql` + gegenereerd `supabase/installatie.sql` (schema + demodata, `npm run supabase-sql`).
+- Inlogscherm met de drie demo-accounts; rol als gekleurd label in de kop; uitloggen.
+- Live verversen met melding bij een nieuw bericht; indicator "Live" in de voet.
+- Databasetest (`tests/supabase.test.js`, rechten en bedrijfsregels) draait in GitHub Actions op een echte PostgreSQL.
+
+**Nieuwe risico's**
+- Gratis Supabase pauzeert na 7 dagen stilte. Vóór de demo controleren.
+- De online versie verstuurt geen e-mail; berichten staan wel in de app.
+- Demo-accounts delen een wachtwoord met testers: na de demo wachtwoorden wijzigen of accounts verwijderen.
+
+## Iteratie 5 – na feedback stuurgroep en testers (in te vullen)
 
 **Doel:**
 **Feedback ontvangen van (wie, wanneer):**
