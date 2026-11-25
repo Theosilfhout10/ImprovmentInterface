@@ -106,6 +106,7 @@ docs/                 Ontwerp, testplan, iteratielog, kwaliteit, promptlog
 - [Demoscript (5 minuten)](docs/demoscript.md)
 - [Specificatie voor AI (spec-driven)](docs/spec.md)
 - [Promptlog en AI-transparantie](docs/promptlog.md)
+- [AI-verantwoording (concept, rubric go/no-go 2)](docs/ai-verantwoording.md)
 - [Kwaliteitsanalyse en route naar productie](docs/kwaliteit.md)
 
 ## Bewuste keuzes en beperkingen

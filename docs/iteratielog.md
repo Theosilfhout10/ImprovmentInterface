@@ -85,10 +85,17 @@ Platformkeuze voor gedeelde opslag, login via Microsoft 365 en echte meldingen (
 - Live verversen met melding bij een nieuw bericht; indicator "Live" in de voet.
 - Databasetest (`tests/supabase.test.js`, rechten en bedrijfsregels) draait in GitHub Actions op een echte PostgreSQL.
 
+**Feedback en resultaat**
+- Theo heeft de live demo getest (25-11-2026): alles werkt zoals bedoeld en wijzigingen verschijnen direct op de andere apparaten (TC-12).
+- Feedback van stakeholders (Olaf, testers) volgt in iteratie 5.
+
 **Nieuwe risico's**
 - Gratis Supabase pauzeert na 7 dagen stilte. Vóór de demo controleren.
 - De online versie verstuurt geen e-mail; berichten staan wel in de app.
 - Demo-accounts delen een wachtwoord met testers: na de demo wachtwoorden wijzigen of accounts verwijderen.
+
+**Betekenis voor MVP**
+- De architectuur "statische app + beheerde database met regels in de database" werkt en is een serieuze MVP-optie naast Power Apps/SharePoint. Te beslissen in het Plan van Aanpak (E6): hosting binnen Egency of Supabase (privacy, verwerkersovereenkomst, beheer), Microsoft 365-login, e-mail of Teams voor meldingen.
 
 ## Iteratie 5 – na feedback stuurgroep en testers (in te vullen)
 

@@ -25,7 +25,8 @@ Max. 6 entiteiten: Medewerker, Categorie, Voorstel, Beoordeling, Statuswijziging
 - Stijl: Apple Human Interface Guidelines (rustig, gegroepeerde lijsten, segmented controls) in Egency-huisstijl.
 - Terugkoppeling ook per e-mail (Gmail met app-wachtwoord in `.env`, nooit in de code).
 - Bedrijfsregels gescheiden van de schermen en automatisch getest.
-- Buiten scope: Freshservice-koppeling, externe indieners, oude ideeën overzetten, echte login.
+- Inloggen (iteratie 4): e-mail en wachtwoord via Supabase, drie demo-accounts (één per rol). Rechten worden in de database afgedwongen.
+- Buiten scope: Freshservice-koppeling, externe indieners, oude ideeën overzetten, Microsoft 365-login (MVP).
 
 ## Acceptatie (wanneer is de eerste versie "werkend"?)
 - De drie kernflows werken van begin tot eind met de demodata.
