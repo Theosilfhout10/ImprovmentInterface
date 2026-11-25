@@ -28,7 +28,7 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | NF1 | Bruikbaarheid: een voorstel indienen kost minder dan 5 minuten. | Acceptatietest met testers (TC-07), tijd meten |
 | NF2 | Veiligheid: ingevoerde tekst wordt nooit als code uitgevoerd (XSS). Alleen de stuurgroep kan beoordelen en status wijzigen. | TC-08, code review `esc()` |
 | NF3 | Toegankelijkheid en apparaten: werkt op laptop en telefoon, bruikbaar met toetsenbord, labels bij alle velden. | TC-09 |
-| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (15 tests) |
+| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (18 tests) |
 | NF5 | Kosten en capaciteit: realiseerbaar binnen €2.500 en max. 2 uur per dag. | Projectplan, urenregistratie |
 
 ## 3. Datamodel (6 entiteiten)
@@ -150,6 +150,23 @@ Indeling volgt het projectplan: 3 sprints van 2 weken, max. 2 uur per dag.
 | 2 | Als **indiener** wil ik automatisch bericht krijgen bij elke statuswijziging, zodat ik zie dat er iets met mijn idee gebeurt. | Elke wijziging → bericht; bij afwijzen/on hold verplichte toelichting; teller ongelezen berichten. | R2 |
 | 3 | Als **manager** wil ik een dashboard, zodat ik in één oogopslag zie wat er openstaat. | Aantallen per status/categorie/prioriteit; gem. reactietijd; signaal bij > 7 dagen zonder reactie. | R4 |
 | 3 | Als **stuurgroeplid** wil ik een overdracht naar Freshservice kunnen markeren. | Status "Overgedragen aan Freshservice" alleen vanuit Ingepland. | R6 |
+
+### 6a. Acceptatiecriteria als scenario's (Gegeven / Als / Dan)
+
+Volgens ATDD/BDD uit de vibecoding-training: eerst gedrag vastleggen, dan bouwen. Elk scenario heeft een geautomatiseerde test of een testgeval.
+
+**Kernfunctie 1: indienen**
+- *Gegeven* een ingelogde medewerker, *als* hij titel, omschrijving en categorie invult en indient, *dan* staat het voorstel op "Ingediend" en krijgt hij een ontvangstbevestiging. (test R1, TC-02)
+- *Gegeven* een leeg formulier, *als* de medewerker indient, *dan* ziet hij per ontbrekend veld een melding en wordt er niets opgeslagen. (test R1, TC-01)
+
+**Kernfunctie 2: beoordelen en terugkoppelen**
+- *Gegeven* een voorstel in beoordeling, *als* de stuurgroep impact hoog, urgentie hoog en inzet middel kiest, *dan* toont de app prioriteit Hoog (score 8). (test R3, TC-03)
+- *Gegeven* een voorstel, *als* de stuurgroep afwijst zonder toelichting, *dan* wordt dat geweigerd met de melding dat de indiener moet weten waarom. (test R2, TC-05)
+- *Gegeven* een voorstel van Theo, *als* de stuurgroep de status wijzigt, *dan* krijgt Theo automatisch een bericht met de nieuwe status en de toelichting. (test R2)
+- *Gegeven* een medewerker zonder stuurgroeprol, *als* hij probeert te beoordelen of de status te wijzigen, *dan* wordt dat geweigerd. (test NF2)
+
+**Kernfunctie 3: dashboard**
+- *Gegeven* een voorstel dat langer dan 7 dagen op "Ingediend" staat, *als* management het dashboard opent, *dan* staat het onder "Aandacht nodig". (test R4, TC-06)
 
 ## 7. Definition of Done
 

@@ -85,6 +85,18 @@
     return fouten;
   }
 
+  // ---- Autorisatie ------------------------------------------------------------
+
+  /**
+   * Alleen stuurgroepleden mogen beoordelen en de status wijzigen (NF2).
+   * De controle staat bewust in de logica en niet alleen in de schermen:
+   * een verborgen knop is geen beveiliging.
+   */
+  function controleerStuurgroep(data, medewerkerId) {
+    const m = data.medewerkers.find(x => x.id === medewerkerId);
+    if (!m || m.rol !== 'stuurgroep') throw new Error('Alleen de stuurgroep mag voorstellen beoordelen of de status wijzigen.');
+  }
+
   // ---- Statuswijziging + automatische terugkoppeling --------------------------
 
   /** Mag een voorstel van status 'van' naar status 'naar'? */
@@ -96,6 +108,7 @@
    * Voert een statuswijziging uit op de data en maakt AUTOMATISCH een notificatie
    * voor de indiener aan (kernfunctionaliteit 2: gegarandeerde terugkoppeling).
    * Bedrijfsregels:
+   *  - alleen de stuurgroep;
    *  - alleen toegestane overgangen;
    *  - bij Afgewezen of On hold is een toelichting verplicht (indiener moet weten waarom);
    *  - Goedgekeurd kan alleen als er een beoordeling is;
@@ -103,6 +116,7 @@
    * @returns {{statuswijziging:object, notificatie:object}}
    */
   function wijzigStatus(data, voorstelId, naar, doorId, toelichting, nu) {
+    controleerStuurgroep(data, doorId);
     const voorstel = data.voorstellen.find(v => v.id === voorstelId);
     if (!voorstel) throw new Error('Voorstel niet gevonden.');
     const van = voorstel.status;
@@ -180,6 +194,8 @@
    * De prioriteit wordt altijd berekend, nooit handmatig ingevuld: zo is hij uitlegbaar.
    */
   function slaBeoordelingOp(data, voorstelId, invoer, beoordelaarId, nu) {
+    controleerStuurgroep(data, beoordelaarId);
+    if (!data.voorstellen.some(v => v.id === voorstelId)) throw new Error('Voorstel niet gevonden.');
     const { score, prioriteit } = berekenPrioriteit(invoer.impact, invoer.urgentie, invoer.inzet);
     if (invoer.geplandeWeek && !/^\d{4}-W\d{2}$/.test(invoer.geplandeWeek)) {
       throw new Error('Geplande week heeft het formaat JJJJ-Wnn, bijv. 2026-W50.');
@@ -258,7 +274,7 @@
 
   const VBR = {
     NIVEAUS, STATUSSEN, OVERGANGEN, OPEN_STATUSSEN, MAX_DAGEN_ZONDER_REACTIE,
-    berekenPrioriteit, valideerVoorstel, magOvergaan, wijzigStatus, dienVoorstelIn,
+    berekenPrioriteit, valideerVoorstel, magOvergaan, controleerStuurgroep, wijzigStatus, dienVoorstelIn,
     slaBeoordelingOp, dashboardCijfers, nieuwId, isoWeek,
   };
 

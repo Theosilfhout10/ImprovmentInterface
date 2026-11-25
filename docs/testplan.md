@@ -11,7 +11,7 @@
 
 ## 2. Geautomatiseerde tests
 
-Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): **15 van 15 geslaagd**.
+Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): **15 van 15 geslaagd**. Na iteratie 2: **18 van 18 geslaagd** (extra: autorisatie, robuustheid, performance).
 
 | Test | Requirement |
 |---|---|
@@ -30,6 +30,9 @@ Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): 
 | Dashboard telt totalen en signaleert voorstellen die te lang wachten | R4 |
 | Demodata is referentieel consistent (alle verwijzingen kloppen) | Datamodel |
 | ISO-weeknummer klopt | Hulpfunctie |
+| Medewerker mag niet beoordelen of status wijzigen (iteratie 2) | NF2 |
+| Rare invoer (HTML, spaties, te lang) veilig afgehandeld (iteratie 2) | R1 |
+| Dashboard met 1.000 voorstellen binnen 1 seconde (iteratie 2) | Performance |
 
 ## 3. Functionele testgevallen (handmatig)
 

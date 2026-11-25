@@ -91,6 +91,28 @@ test('R3 beoordeling: ongeldige weeknotatie wordt geweigerd', () => {
   assert.throws(() => VBR.slaBeoordelingOp(d, 'v6', { impact: 'laag', urgentie: 'laag', inzet: 'laag', geplandeWeek: 'week 50' }, 'm4', NU));
 });
 
+test('NF2 autorisatie: een medewerker mag niet beoordelen of de status wijzigen', () => {
+  const d = maakDemodata(NU);
+  const v = VBR.dienVoorstelIn(d, geldig, 'm1', NU);
+  assert.throws(() => VBR.wijzigStatus(d, v.id, 'In beoordeling', 'm1', '', NU), /Alleen de stuurgroep/);
+  assert.throws(() => VBR.slaBeoordelingOp(d, v.id, { impact: 'hoog', urgentie: 'hoog', inzet: 'laag' }, 'm6', NU), /Alleen de stuurgroep/);
+  assert.equal(v.status, 'Ingediend');
+});
+test('R1 robuustheid: rare invoer (HTML, alleen spaties, extreem lang) wordt veilig afgehandeld', () => {
+  const d = maakDemodata(NU);
+  assert.ok(VBR.valideerVoorstel({ titel: 'x'.repeat(101), omschrijving: ' '.repeat(50), categorieId: 'c9' }, d.categorieen).length >= 3);
+  const v = VBR.dienVoorstelIn(d, { ...geldig, titel: '  <b>Vet</b> idee  ' }, 'm1', NU);
+  assert.equal(v.titel, '<b>Vet</b> idee'); // opgeslagen als tekst; het scherm escapet bij tonen
+});
+test('Performance: dashboard met 1.000 voorstellen rekent binnen 1 seconde', () => {
+  const d = maakDemodata(NU);
+  for (let i = 0; i < 1000; i++) VBR.dienVoorstelIn(d, { ...geldig, titel: 'Voorstel ' + i }, 'm1', NU);
+  const start = Date.now();
+  const c = VBR.dashboardCijfers(d, NU);
+  assert.equal(c.totaal, 1007);
+  assert.ok(Date.now() - start < 1000);
+});
+
 test('R4 dashboard: telt totalen en signaleert voorstellen die te lang wachten', () => {
   const d = maakDemodata(NU);
   const c = VBR.dashboardCijfers(d, NU);
