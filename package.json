@@ -1,13 +1,16 @@
 {
   "name": "verbeterregistratie",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Verbeterregistratie (VBR) voor Egency – module Digitale Oplossingen Ontwerpen en Realiseren",
   "private": true,
   "scripts": {
     "start": "node server/start.js",
-    "test": "node --test"
+    "test": "node --test",
+    "supabase-sql": "node scripts/maak-supabase-sql.js"
   },
-  "engines": { "node": ">=20.12" },
+  "engines": {
+    "node": ">=20.12"
+  },
   "dependencies": {
     "express": "4.21.2",
     "nodemailer": "6.9.16"

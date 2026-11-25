@@ -125,6 +125,20 @@ flowchart LR
 - **E-mail mag het proces nooit blokkeren.** De statuswijziging wordt eerst opgeslagen, daarna gaat de mail. Lukt de mail niet, dan staat het bericht nog steeds in de app en is de mislukking zichtbaar (`mail = mislukt`).
 - **Adapter in de browser.** Zonder server (los geopend of online preview) draait dezelfde app als demo in de browser.
 
+## 3b. Architectuur online (iteratie 4)
+
+```mermaid
+flowchart LR
+    T1[Telefoon<br>medewerker] & T2[Laptop<br>stuurgroep] & T3[Tablet<br>management] -- "inloggen + RPC (HTTPS)" --> P[GitHub Pages<br>public/]
+    P -.-> A[Supabase Auth]
+    P -- "lezen (RLS) / functies" --> DB[(Supabase Postgres<br>supabase/schema.sql)]
+    DB -- "Realtime (websocket)" --> T1 & T2 & T3
+```
+
+- **Zelfde app, andere bron.** `app.js` kiest automatisch: Node-server, anders Supabase (als `config.js` is ingevuld), anders de lokale demo.
+- **Regels in de database.** In de browser kan iemand alles aanpassen, dus de database controleert zelf: lezen mag voor ingelogde gebruikers (berichten alleen je eigen), schrijven alleen via functies (`dien_voorstel_in`, `sla_beoordeling_op`, `wijzig_status`, `markeer_gelezen`) met dezelfde regels als `logica.js`. Rol komt uit de tabel `medewerker`, gekoppeld aan het inlogaccount via e-mail.
+- **Live.** Elke wijziging in voorstel, beoordeling, statuswijziging of notificatie gaat via Supabase Realtime naar alle open schermen; de app haalt dan de data opnieuw op. Waar iemand aan het typen is, wordt het scherm niet overschreven.
+
 ## 4. Statusmodel (procesflow)
 
 ```mermaid

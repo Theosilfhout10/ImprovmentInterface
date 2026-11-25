@@ -19,6 +19,10 @@
           <span class="visueel-verborgen">Ingelogd als</span>
           <select id="gebruikerKeuze"></select>
         </label>
+        <div id="account" class="account" hidden>
+          <span class="account-tekst"><span id="accountNaam" class="account-naam"></span><span id="accountRol" class="rol-chip"></span></span>
+          <button type="button" class="tekstknop" data-actie="uitloggen">Uitloggen</button>
+        </div>
         <button id="belKnop" class="rond-knop" type="button" aria-label="Berichten">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
           <span id="belTeller" class="teller" hidden>0</span>
@@ -39,6 +43,7 @@
 
   <script src="js/logica.js"></script>
   <script src="js/demodata.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
