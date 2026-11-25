@@ -21,6 +21,12 @@ Open daarna http://localhost:3000. Kies rechtsboven wie je bent:
 
 De data staat op de server in `data/vbr.json` (niet in GitHub), dus iedereen die de app opent ziet dezelfde voorstellen. Open je `public/index.html` los zonder server, dan draait de app als demo in je browser.
 
+## Online demo
+
+Bij elke push naar `main` wordt de app gepubliceerd op GitHub Pages: https://theosilfhout10.github.io/ImprovmentInterface/
+
+Daar draait hij als demo in de browser: elke bezoeker krijgt eigen voorbeelddata, er is geen server en er wordt niet gemaild. Geschikt voor demo en CGI; zet daar geen echte gegevens in.
+
 ## E-mail instellen (Gmail)
 
 Zonder instellingen staat de e-mail in **voorbeeldstand**: mails worden opgesteld maar niet verstuurd. Je ziet ze via *Verzonden e-mails* onderaan de app.
