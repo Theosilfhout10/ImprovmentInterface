@@ -21,6 +21,12 @@ Open daarna http://localhost:3000. Kies rechtsboven wie je bent:
 
 De data staat op de server in `data/vbr.json` (niet in GitHub), dus iedereen die de app opent ziet dezelfde voorstellen. Open je `public/index.html` los zonder server, dan draait de app als demo in je browser.
 
+## Online demo
+
+Bij elke push naar `main` wordt de app gepubliceerd op GitHub Pages: https://theosilfhout10.github.io/ImprovmentInterface/
+
+Is `public/js/config.js` ingevuld, dan log je daar in met een van de drie demo-accounts en zie je wijzigingen live op alle apparaten (zie hieronder). Is hij leeg, dan draait de app als demo in de browser met eigen voorbeelddata per bezoeker. Zet er geen echte gegevens in.
+
 ## Live demo met drie accounts (Supabase)
 
 De online versie (GitHub Pages) gebruikt [Supabase](https://supabase.com) (gratis): echte inlogaccounts, één gedeelde database en live updates. Wijzigt de stuurgroep een status, dan ziet de indiener dat binnen een seconde op een ander apparaat, inclusief bericht.
