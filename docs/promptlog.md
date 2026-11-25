@@ -7,13 +7,16 @@ De opdracht vraagt transparantie over AI-gebruik: wat heeft AI gegenereerd, wat 
 | 1 | 25-11-2026 | "Als het goed is zie je een opdracht waar ik een applicatie moet maken. Ik heb in mijn bestanden een document gemaakt waarin wordt aangegeven wat ik wil en hoe. Kan je een plan maken en die opdracht uitvoeren." | Opdracht, applicatievoorstel, projectplan en stakeholderanalyse gelezen; samenvatting en plan gemaakt; platformkeuze voorgelegd (webapp of Power Apps). | Theo koos voor echte code (vibecoding). |
 | 2 | 25-11-2026 | "Ik moet dit vibecoden dus moet wel code zijn. Kan je niet lokaal mijn GitHub gebruiken?" | Repository ImprovmentInterface gekoppeld; iteratie 1 gebouwd: logica, schermen, 15 tests, CI, documentatie. | Browsertest met screenshots; 3 opmaakfouten gevonden en opgelost (zie [iteratielog](iteratielog.md)). |
 | 3 | 25-11-2026 | "Ik heb in de map SDLC een nieuw document gezet. Kan je die bekijken en aanpassingen maken?" (vibecoding-training) | Inzichten uit de training verwerkt: spec-driven specificatie, Gegeven/Als/Dan-criteria, kwaliteitsanalyse, autorisatie in de logica, extra tests; wijziging via pull request (code review als quality gate). | *In te vullen door Theo na review van de pull request.* |
+| 4 | 25-11-2026 | "Lovable hoeft niet. Is een prototype dat wel moet werken en dat we misschien gaan gebruiken. Graag Egency-huisstijl maar wel clean en overzichtelijk (Apple-designstijl). Preview is te AI-gebouwd qua stijl, moet makkelijker te gebruiken zijn zonder afleiding. Zorg dat ik ook kan mailen (los Gmail-account)." | Zocht een Apple-design-skill (niet beschikbaar), haalde logo en kleuren van egency.nl, bouwde server + gedeelde opslag + Gmail-mail, nieuw ontwerp, 8 extra tests. | *In te vullen door Theo na review van de pull request.* |
 
 ## Wat moet Theo zelf kunnen uitleggen (voorbereiding CGI)
 
 - Hoe `berekenPrioriteit()` werkt en waarom inzet "omgekeerd" meetelt.
 - Waarom elke statuswijziging een Notificatie aanmaakt (R2, risico "geen terugkoppeling").
 - Waarom `esc()` in `app.js` nodig is (XSS) en waarom de rolcontrole in `logica.js` staat.
-- Wat `localStorage` betekent voor het prototype en waarom dat niet geschikt is voor productie.
+- Wat de server doet en waarom de bedrijfsregels daar opnieuw worden gecontroleerd.
+- Waarom het Gmail-wachtwoord in `.env` staat en niet in de code.
+- Wat er gebeurt als een e-mail niet verzonden kan worden.
 - Wat een test in `tests/logica.test.js` controleert en hoe je hem draait.
 
 ## Risico's van AI-gegenereerde code (reflectie)

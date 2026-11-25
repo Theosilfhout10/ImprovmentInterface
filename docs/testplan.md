@@ -11,7 +11,7 @@
 
 ## 2. Geautomatiseerde tests
 
-Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): **15 van 15 geslaagd**. Na iteratie 2: **18 van 18 geslaagd** (extra: autorisatie, robuustheid, performance).
+Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): **15 van 15 geslaagd**. Na iteratie 2: **18 van 18 geslaagd** (extra: autorisatie, robuustheid, performance). Na iteratie 3: **26 van 26 geslaagd** (extra: server-API, opslag, e-mail).
 
 | Test | Requirement |
 |---|---|
@@ -33,6 +33,14 @@ Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): 
 | Medewerker mag niet beoordelen of status wijzigen (iteratie 2) | NF2 |
 | Rare invoer (HTML, spaties, te lang) veilig afgehandeld (iteratie 2) | R1 |
 | Dashboard met 1.000 voorstellen binnen 1 seconde (iteratie 2) | Performance |
+| API geeft data en mailstand (iteratie 3) | – |
+| Indienen via API slaat op in bestand en stuurt ontvangstmail (iteratie 3) | R1, R2 |
+| Statuswijziging mailt de indiener met toelichting; mailstatus vastgelegd (iteratie 3) | R2 |
+| Medewerker of onbekende gebruiker geweigerd door de server (iteratie 3) | NF2 |
+| Geweigerde wijziging laat geen halve data achter (iteratie 3) | Correctheid |
+| Testadres-schakelaar stuurt alle mail naar één adres (iteratie 3) | NF2 |
+| HTML in titel wordt ge-escaped in de e-mail (iteratie 3) | NF2 |
+| Mailer kiest voorbeeldstand zonder Gmail-instellingen (iteratie 3) | – |
 
 ## 3. Functionele testgevallen (handmatig)
 
@@ -45,6 +53,7 @@ Uitvoeren met `npm test`. Resultaat bij oplevering van iteratie 1 (25-11-2026): 
 | TC-05 | R2, R5 | Probeer af te wijzen zonder toelichting; daarna mét. Wissel naar indiener. | Zonder toelichting geweigerd. Indiener ziet bericht met toelichting en historie. | Geslaagd |
 | TC-06 | R4 | Als Haico: open Dashboard. | Tegels en grafieken kloppen met de data; voorstel > 7 dagen zonder reactie wordt gesignaleerd. | Geslaagd |
 | TC-07 | NF1 | Laat een tester zonder uitleg een voorstel indienen; meet de tijd. | Binnen 5 minuten, zonder hulp. | *Nog uit te voeren met testers* |
+| TC-10 | R2 | Vul `.env` met Gmail en `MAIL_TEST_ONTVANGER`, zet een status om. | Testadres ontvangt binnen een minuut een nette e-mail met status en toelichting. | *Uit te voeren door Theo met eigen Gmail* |
 | TC-08 | NF2 | Dien een voorstel in met titel `<script>alert(1)</script>`. | Tekst wordt letterlijk getoond, er verschijnt geen pop-up. | Geslaagd |
 | TC-09 | NF3 | Open de app op een telefoon (390 px breed) en bedien het formulier met alleen het toetsenbord. | Geen horizontaal scrollen; alle velden bereikbaar met Tab. | Deels: 390 px zonder horizontaal scrollen; toetsenbordbediening nog handmatig controleren |
 

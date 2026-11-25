@@ -5,9 +5,9 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const VBR = require('../js/logica.js');
+const VBR = require('../public/js/logica.js');
 globalThis.VBR = VBR; // demodata gebruikt VBR.berekenPrioriteit
-const maakDemodata = require('../js/demodata.js');
+const maakDemodata = require('../public/js/demodata.js');
 
 const NU = new Date('2026-11-25T12:00:00Z');
 const geldig = { titel: 'Back-ups controleren', omschrijving: 'Wekelijkse controle op mislukte back-ups bij klanten.', categorieId: 'c1' };

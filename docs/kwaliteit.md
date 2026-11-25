@@ -7,8 +7,8 @@ De vibecoding-training stelt: *sneller code genereren verandert de kwaliteitsatt
 | Correctheid | Werkt het ook bij uitzonderingen en foutieve invoer? | Invoer gevalideerd; ongeldige statusovergangen en ontbrekende toelichting worden geweigerd. | Tests R1/R2, robuustheidstest | Acceptatietest met key users (TC-07) |
 | Performance | Wat gebeurt er bij 10, 1.000 of 1.000.000 records? | Bij 1.000 voorstellen rekent het dashboard ruim binnen 1 seconde. Egency verwacht tientallen per jaar. | Performancetest | Bij gedeelde database: berekening naar de server of een query |
 | Onderhoudbaarheid | Is de code begrijpelijk, modulair, getest en overdraagbaar? | Logica los van schermen, Nederlands commentaar, geen framework, 18 tests, CI. | `js/logica.js`, GitHub Actions | Codeconventies en review per pull request |
-| Security & privacy | Authenticatie, autorisatie, secrets, persoonsgegevens, dependencies | Geen login (bewuste keuze); rolcontrole in de logica; XSS voorkomen; geen dependencies; alleen fictieve data. | Test NF2, TC-08 | Login via Microsoft 365 (Entra ID); review door security officer vóór livegang |
-| Schaalbaarheid | Kan datamodel en architectuur meegroeien? | Datamodel genormaliseerd (6 entiteiten); opslag per browser schaalt niet. | ERD | Gedeelde opslag (SharePoint-lijst of database) |
+| Security & privacy | Authenticatie, autorisatie, secrets, persoonsgegevens, dependencies | Geen login (bewuste keuze); rolcontrole op de server; XSS voorkomen in app en e-mail; Gmail-wachtwoord alleen in `.env`; beveiligingsheaders (CSP); 2 vastgezette pakketten (Express, Nodemailer). | Tests NF2, TC-08 | Login via Microsoft 365 (Entra ID); review door security officer vóór livegang |
+| Schaalbaarheid | Kan datamodel en architectuur meegroeien? | Datamodel genormaliseerd (6 entiteiten); gedeelde opslag in één JSON-bestand op de server, ruim genoeg voor ~20 gebruikers. | ERD, servertests | Database bij groei of meerdere servers |
 | Vendor lock-in | Kun je code en data exporteren en elders beheren? | Volledige broncode in eigen GitHub; data exporteerbaar als JSON; geen platformafhankelijkheid. | Repository, exportknop | Bij keuze voor een low-code platform opnieuw afwegen |
 
 ## Waarom code in GitHub en niet een AI-app-builder zoals Lovable?
@@ -39,6 +39,6 @@ Volgens de training: Business fit → Requirements → Engineering → Verificat
 |---|---|---|
 | Business fit | Probleem en doel onderbouwd in projectplan en stakeholderanalyse | Validatie met de stuurgroep: lost dit het ondersneeuwen echt op? |
 | Requirements | R1–R6 en NF1–NF5 | Beslissen over beveiligingsvoorstellen (Arjen), meldingskanaal (e-mail of Teams) |
-| Engineering | Prototype, datamodel, tests | Platformkeuze voor gedeelde opslag en login |
+| Engineering | Werkende app met server, gedeelde opslag, e-mail, 26 tests | Login via Microsoft 365, hosting op een interne server |
 | Verification | 18 geautomatiseerde tests, functionele tests | Acceptatietest key users, security-review |
 | Operations | – | Beheer (wie?), back-up, werkinstructie, communicatie en livegang (sprint 3) |
