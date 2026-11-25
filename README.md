@@ -1,50 +1,75 @@
 # Verbeterregistratie (VBR) – prototype
 
-Prototype van een interne applicatie voor **Egency** waarin medewerkers verbetervoorstellen indienen, de stuurgroep ze wekelijks beoordeelt en management de voortgang volgt op een dashboard.
+Werkend prototype van een interne applicatie voor **Egency** waarin medewerkers verbetervoorstellen indienen, de stuurgroep ze wekelijks beoordeelt en management de voortgang volgt op een dashboard.
 
 Gemaakt voor de integrale opdracht **Digitale Oplossingen Ontwerpen en Realiseren** (Avans, leerjaar 2) door Theo Silfhout. Opdrachtgever/Product Owner: Olaf van Heeswijk.
 
 ## Starten
 
-Geen installatie nodig.
+Vereist [Node.js](https://nodejs.org) 20.12 of nieuwer (LTS aanbevolen).
 
-1. Download of clone deze repository.
-2. Dubbelklik op `index.html`. De app opent in je browser.
-3. Kies rechtsboven met **Ingelogd als** een rol om de verschillende gebruikers te bekijken:
-   - **Medewerker** (bijv. Theo): voorstel indienen, eigen voorstellen volgen, berichten lezen.
-   - **Stuurgroep** (Olaf, Arjen): voorstellen beoordelen, prioriteren, inplannen en status wijzigen.
-   - **Management** (Haico): dashboard.
+```bash
+npm install
+npm start
+```
 
-De app start met demodata. Met **Demodata herstellen** (onderaan) zet je alles terug. Data wordt alleen lokaal in je browser opgeslagen (`localStorage`).
+Open daarna http://localhost:3000. Kies rechtsboven wie je bent:
+
+- **Medewerker** (bijv. Theo): voorstel indienen en eigen voorstellen volgen.
+- **Stuurgroep** (Olaf, Arjen): beoordelen, prioriteren, inplannen en status wijzigen.
+- **Management** (Haico): dashboard.
+
+De data staat op de server in `data/vbr.json` (niet in GitHub), dus iedereen die de app opent ziet dezelfde voorstellen. Open je `public/index.html` los zonder server, dan draait de app als demo in je browser.
+
+## E-mail instellen (Gmail)
+
+Zonder instellingen staat de e-mail in **voorbeeldstand**: mails worden opgesteld maar niet verstuurd. Je ziet ze via *Verzonden e-mails* onderaan de app.
+
+Echt mailen:
+
+1. Maak een apart Gmail-account, bijvoorbeeld `verbeterregistratie.egency@gmail.com`.
+2. Zet in dat account **2-stapsverificatie** aan.
+3. Maak een **app-wachtwoord** via https://myaccount.google.com/apppasswords (16 tekens).
+4. Kopieer `.env.example` naar `.env` en vul `GMAIL_USER` en `GMAIL_APP_PASSWORD` in.
+5. Vul tijdens het testen `MAIL_TEST_ONTVANGER` in met je eigen adres, zodat collega's nog geen mail krijgen.
+6. Herstart met `npm start`. De console meldt "E-mail: echt verzenden via Gmail".
+
+`.env` staat in `.gitignore` en komt nooit in GitHub. Deel het app-wachtwoord met niemand. Je kunt het in je Google-account altijd intrekken.
+
+De e-mailadressen van de medewerkers staan in `data/vbr.json` (bij de demodata zijn dat voorbeeldadressen).
 
 ## Tests draaien
-
-Vereist Node.js 18 of nieuwer.
 
 ```bash
 npm test
 ```
 
-De tests staan in `tests/logica.test.js` en verwijzen naar de requirements (R1 t/m R4). Bij elke push draaien ze ook automatisch via GitHub Actions.
+26 tests: bedrijfsregels (`tests/logica.test.js`) en server, opslag en e-mail (`tests/server.test.js`). Bij elke push draaien ze ook automatisch via GitHub Actions.
 
 ## Drie kernfunctionaliteiten
 
 | # | Kernfunctionaliteit | Requirement | Waar in de code |
 |---|---|---|---|
-| 1 | Voorstel indienen via een formulier met max. 5 velden | R1 | `schermIndienen()` in `js/app.js`, `valideerVoorstel()` en `dienVoorstelIn()` in `js/logica.js` |
-| 2 | Beoordelen en prioriteren (impact, urgentie, inzet) met automatische terugkoppeling bij elke statuswijziging | R2, R3 | `openDetail()` in `js/app.js`, `berekenPrioriteit()`, `slaBeoordelingOp()` en `wijzigStatus()` in `js/logica.js` |
-| 3 | Dashboard voor management | R4 | `schermDashboard()` in `js/app.js`, `dashboardCijfers()` in `js/logica.js` |
+| 1 | Voorstel indienen via een formulier met max. 5 velden | R1 | `schermIndienen()` in `public/js/app.js`, `valideerVoorstel()` en `dienVoorstelIn()` in `public/js/logica.js` |
+| 2 | Beoordelen en prioriteren (impact, urgentie, inzet) met automatische terugkoppeling (in de app en per e-mail) bij elke statuswijziging | R2, R3 | `openVoorstel()` in `public/js/app.js`, `berekenPrioriteit()`, `slaBeoordelingOp()` en `wijzigStatus()` in `public/js/logica.js`, `server/mail.js` |
+| 3 | Dashboard voor management | R4 | `schermDashboard()` in `public/js/app.js`, `dashboardCijfers()` in `public/js/logica.js` |
 
 ## Projectstructuur
 
 ```
-index.html            Pagina-opbouw
-css/stijl.css         Opmaak (ook donkere modus en mobiel)
-js/logica.js          Bedrijfsregels: prioriteit, statusovergangen, validatie, dashboardcijfers
-js/demodata.js        Voorbeelddata voor de demo
-js/app.js             Schermen en interactie
-tests/                Geautomatiseerde tests (node:test)
-docs/                 Ontwerp, ERD, testplan en iteratielog
+public/               Wat de browser laadt
+  index.html          Pagina-opbouw
+  css/stijl.css       Opmaak: Apple-stijl in Egency-huisstijl, licht en donker, mobiel
+  js/logica.js        Bedrijfsregels (gedeeld door browser én server)
+  js/demodata.js      Voorbeelddata
+  js/app.js           Schermen en interactie
+server/               De server
+  start.js            Startpunt (npm start), leest .env
+  app.js              API: indienen, beoordelen, status, berichten
+  opslag.js           Opslag in data/vbr.json
+  mail.js             E-mail via Gmail (of voorbeeldstand)
+tests/                Geautomatiseerde tests
+docs/                 Ontwerp, testplan, iteratielog, kwaliteit, promptlog
 ```
 
 ## Documentatie
@@ -57,11 +82,10 @@ docs/                 Ontwerp, ERD, testplan en iteratielog
 - [Promptlog en AI-transparantie](docs/promptlog.md)
 - [Kwaliteitsanalyse en route naar productie](docs/kwaliteit.md)
 
-## Bewuste keuzes en beperkingen van dit prototype
+## Bewuste keuzes en beperkingen
 
-- **Geen echte login.** Je kiest een gebruiker uit een lijst. In de MVP regelt Microsoft 365 (Entra ID) de identiteit.
-- **Terugkoppeling is een in-app bericht.** In de MVP gaat dit via e-mail of Teams (bijv. Power Automate).
-- **Opslag in de browser.** Elke browser heeft zijn eigen data. In de MVP komt dit in een gedeelde opslag (bijv. SharePoint-lijst of database).
+- **Nog geen echte login.** Je kiest wie je bent uit een lijst. Voor livegang komt Microsoft 365-login (Entra ID). Tot die tijd alleen op het interne netwerk gebruiken.
+- **Opslag in één JSON-bestand.** Ruim voldoende voor ~20 gebruikers; maak een back-up door `data/vbr.json` te kopiëren.
 - **Geen koppeling met Freshservice.** Dat valt buiten de scope (projectplan, afbakening).
 
 ## AI-gebruik

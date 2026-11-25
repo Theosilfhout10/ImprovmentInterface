@@ -14,7 +14,7 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | ID | Requirement | Prioriteit | Bron | Aangetoond met |
 |---|---|---|---|---|
 | R1 | Een medewerker dient een voorstel in via een formulier van **maximaal 5 velden** (titel, omschrijving, categorie, klant, verwachte opbrengst). Titel, omschrijving en categorie zijn verplicht. | Must | Projectplan §4 | Test R1, TC-01/02 |
-| R2 | Bij **elke statuswijziging** krijgt de indiener **automatisch** een bericht, met toelichting. Afwijzen of on hold zetten kan alleen mét toelichting. | Must | Projectplan §3/§4, risico "geen terugkoppeling" | Test R2, TC-04/05 |
+| R2 | Bij **elke statuswijziging** krijgt de indiener **automatisch** een bericht in de app én per e-mail, met toelichting. Afwijzen of on hold zetten kan alleen mét toelichting. | Must | Projectplan §3/§4, risico "geen terugkoppeling" | Test R2, TC-04/05 |
 | R3 | De stuurgroep beoordeelt op **impact, urgentie en inzet** (elk laag/middel/hoog). De app **berekent** de prioriteit. Goedgekeurde voorstellen worden ingepland in een week (capaciteit). | Must | Projectplan §3/§4 | Test R3, TC-03 |
 | R4 | Management ziet op een **dashboard** het aantal voorstellen per status, categorie en prioriteit, de reactietijd en voorstellen die te lang wachten. | Must | Projectplan §4 | Test R4, TC-06 |
 | R5 | Een indiener ziet in "Mijn voorstellen" de status en volledige historie van zijn/haar voorstellen. | Should | Voorstel: "collega's moeten zien dat er iets gebeurt" | TC-05 |
@@ -26,9 +26,9 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | ID | Eis | Hoe getoetst |
 |---|---|---|
 | NF1 | Bruikbaarheid: een voorstel indienen kost minder dan 5 minuten. | Acceptatietest met testers (TC-07), tijd meten |
-| NF2 | Veiligheid: ingevoerde tekst wordt nooit als code uitgevoerd (XSS). Alleen de stuurgroep kan beoordelen en status wijzigen. | TC-08, code review `esc()` |
+| NF2 | Veiligheid: ingevoerde tekst wordt nooit als code uitgevoerd (XSS), ook niet in e-mails. Alleen de stuurgroep kan beoordelen en status wijzigen (gecontroleerd op de server). Geen wachtwoorden in de code. | TC-08, tests NF2, `.env` buiten Git |
 | NF3 | Toegankelijkheid en apparaten: werkt op laptop en telefoon, bruikbaar met toetsenbord, labels bij alle velden. | TC-09 |
-| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (18 tests) |
+| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (26 tests) |
 | NF5 | Kosten en capaciteit: realiseerbaar binnen €2.500 en max. 2 uur per dag. | Projectplan, urenregistratie |
 
 ## 3. Datamodel (6 entiteiten)
@@ -95,6 +95,7 @@ erDiagram
         string statuswijzigingId FK
         string bericht
         bool gelezen
+        string mail "verzonden | voorbeeld | mislukt"
         datetime datum
     }
 ```
@@ -107,6 +108,22 @@ erDiagram
 - **Notificatie hoort bij één statuswijziging**: zo is aantoonbaar dat *elke* wijziging tot terugkoppeling leidt (R2, het grootste risico uit het projectplan).
 - **Klant is een tekstveld, geen entiteit**: klantbeheer valt buiten scope en zou een 7e entiteit opleveren.
 - **Prioriteit wordt berekend, niet ingevuld**: `score = impact + urgentie + (4 − inzet)` met laag=1, middel=2, hoog=3. Score 7–9 = Hoog, 5–6 = Middel, 3–4 = Laag. Zo is de prioriteit uitlegbaar en consistent tussen stuurgroepleden.
+
+## 3a. Architectuur (iteratie 3)
+
+```mermaid
+flowchart LR
+    B[Browser<br>public/: schermen] -- "API (JSON)" --> S[Server<br>server/app.js]
+    S --> L[Bedrijfsregels<br>public/js/logica.js]
+    B -. dezelfde regels .-> L
+    S --> O[(data/vbr.json)]
+    S --> M[server/mail.js] -- SMTP --> G[Gmail] --> I[Indiener]
+```
+
+- **Bedrijfsregels op één plek.** `logica.js` draait in de browser én op de server. De server is leidend: hij controleert elke wijziging opnieuw, want wat in de browser gebeurt kan een gebruiker aanpassen.
+- **Opslag in een JSON-bestand** in plaats van een database: past bij ~20 gebruikers, geen beheer nodig, en de structuur is precies het datamodel.
+- **E-mail mag het proces nooit blokkeren.** De statuswijziging wordt eerst opgeslagen, daarna gaat de mail. Lukt de mail niet, dan staat het bericht nog steeds in de app en is de mislukking zichtbaar (`mail = mislukt`).
+- **Adapter in de browser.** Zonder server (los geopend of online preview) draait dezelfde app als demo in de browser.
 
 ## 4. Statusmodel (procesflow)
 

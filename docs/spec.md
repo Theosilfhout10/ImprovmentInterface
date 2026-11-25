@@ -21,7 +21,9 @@ Max. 6 entiteiten: Medewerker, Categorie, Voorstel, Beoordeling, Statuswijziging
 - Nederlandstalig, eenvoudige navigatie, werkt op laptop en telefoon, donkere modus.
 - Validatie van alle invoer; ingevoerde tekst nooit als HTML uitvoeren.
 - Rollen: alleen de stuurgroep beoordeelt en wijzigt status (ook afgedwongen in de logica).
-- Geen framework of installatie: openen door te dubbelklikken, zodat de code uitlegbaar blijft.
+- Geen front-end-framework, zodat de code uitlegbaar blijft. Kleine Node.js-server (Express) voor gedeelde opslag en e-mail.
+- Stijl: Apple Human Interface Guidelines (rustig, gegroepeerde lijsten, segmented controls) in Egency-huisstijl.
+- Terugkoppeling ook per e-mail (Gmail met app-wachtwoord in `.env`, nooit in de code).
 - Bedrijfsregels gescheiden van de schermen en automatisch getest.
 - Buiten scope: Freshservice-koppeling, externe indieners, oude ideeën overzetten, echte login.
 
