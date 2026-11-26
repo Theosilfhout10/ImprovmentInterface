@@ -448,8 +448,8 @@
         <h1>Nieuw voorstel</h1>
         <p>Zie je iets dat beter kan? Leg het vast. Je hoort bij elke stap wat ermee gebeurt.</p>
       </div>
-      <form id="indienForm" class="formulier" novalidate>
-        <div class="kaart velden">
+      <form id="indienForm" class="formulier indien-raster" novalidate>
+        <div class="kaart velden indien-hoofd">
           <div class="veld" data-veld="titel">
             <label for="f-titel">Titel</label>
             <input id="f-titel" name="titel" maxlength="100" autocomplete="off" placeholder="Bijv. MFA afdwingen voor beheeraccounts">
@@ -466,6 +466,7 @@
             </div>
           </div>
         </div>
+        <div class="indien-zijkant">
         <div class="kaart velden">
           <div class="veld" data-veld="klant">
             <label for="f-klant">Klant <span class="optioneel">optioneel</span></label>
@@ -477,6 +478,7 @@
           </div>
         </div>
         <button class="knop breed" type="submit">Voorstel indienen</button>
+        </div>
       </form>`;
     const omschr = $('#f-omschrijving');
     omschr.addEventListener('input', () => { $('#tellerOmschrijving').textContent = omschr.value.length; });
@@ -572,6 +574,7 @@
         <div class="cijfer${c.teLangOpen.length ? ' let-op' : ''}"><span class="getal">${c.teLangOpen.length}</span><span class="naam">Langer dan ${VBR.MAX_DAGEN_ZONDER_REACTIE} dagen stil</span></div>
         <div class="cijfer"><span class="getal">${c.gemReactieDagen === null ? '–' : String(c.gemReactieDagen).replace('.', ',')}</span><span class="naam">Dagen tot eerste reactie</span></div>
       </div>
+      <div class="dashboard-raster">
       <section class="groep">
         <h2 class="groep-titel">Aandacht nodig</h2>
         <div class="kaart">${aandacht.length ? `<ul class="lijst">${aandacht.map(a => voorstelRij(a.v, a.meta)).join('')}</ul>` : '<div class="leeg">Niets dat nu aandacht vraagt.</div>'}</div>
@@ -583,6 +586,7 @@
           <div class="kaart">${balken([['Hoog', 'k-hoog'], ['Middel', 'k-middel'], ['Laag', 'k-laag'], ['Nog niet beoordeeld', 'k-ingediend']].map(([n, k]) => ({ naam: n, aantal: c.perPrioriteit[n], klasse: k })))}</div>
           <h2 class="groep-titel" style="margin-top:16px">Per categorie</h2>
           <div class="kaart">${balken(c.perCategorie)}</div></section>
+      </div>
       </div>`;
   }
 

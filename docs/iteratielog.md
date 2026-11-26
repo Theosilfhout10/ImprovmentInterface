@@ -154,6 +154,11 @@ Platformkeuze voor gedeelde opslag, login via Microsoft 365 en echte meldingen (
 **Nieuwe risico's**
 - In de Node-versie zonder Realtime verschijnen pop-ups pas bij de verversing (elke 30 seconden of bij terugkeer naar het tabblad); online (Supabase) direct.
 
+## Iteratie 5b+ – schermvullende layout (26-11)
+
+**Aanleiding:** Theo zag dat de app op een breed scherm maar ongeveer 70% van de breedte gebruikte (vaste maximale breedte van 880px).
+**Aangepast:** de pagina groeit mee tot 1680px met een vloeiende rand (16 tot 48px). Op brede schermen staan bij "Nieuw voorstel" de optionele velden naast de verplichte velden, en op het dashboard staat "Aandacht nodig" naast de grafieken (vanaf 1500px drie kolommen). De gesprekkenlijst wordt breder mee en het gesprek gebruikt de schermhoogte. Tekstregels blijven leesbaar door begrenzingen op introtekst en chatballonnen. Telefoon en tablet ongewijzigd. Geen databasewijziging.
+
 ## Iteratie 5c – na feedback stuurgroep en testers (in te vullen)
 
 **Doel:**
