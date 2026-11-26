@@ -130,7 +130,12 @@
           lees('beoordeling'),
           lees('statuswijziging'),
           lees('notificatie'), // de database geeft alleen je eigen berichten terug (Row Level Security)
-          lees('reactie'),     // alleen gesprekken waarin je indiener bent, of alle als je in de stuurgroep zit (Row Level Security)
+          // Alleen gesprekken waarin je indiener bent, of alle als je in de stuurgroep zit (Row Level Security).
+          // Is het nieuwe SQL-script nog niet gedraaid, dan ontbreekt de tabel: de rest van de app blijft dan gewoon werken.
+          sb.from('reactie').select('*').then(({ data: d, error }) => {
+            if (error) { console.warn('[gesprek] niet beschikbaar:', error.message); return []; }
+            return d;
+          }),
         ]);
         const mij = Array.isArray(ik) ? ik[0] : ik;
         if (!mij || !mij.id) throw new Error('Je account is nog niet gekoppeld aan een medewerker. Vraag de beheerder om je e-mailadres toe te voegen.');
