@@ -25,14 +25,15 @@ const categorieen = d.categorieen.map(c => `(${q(c.id)}, ${q(c.naam)}, ${q(c.oms
 const voorstellen = d.voorstellen.map(v => `(${q(v.id)}, ${q(v.titel)}, ${q(v.omschrijving)}, ${q(v.categorieId)}, ${q(v.klant)}, ${q(v.opbrengst)}, ${q(v.indienerId)}, ${q(v.status)}, ${t(v.ingediendOp)})`);
 const beoordelingen = d.beoordelingen.map(b => `(${q(b.id)}, ${q(b.voorstelId)}, ${q(b.beoordelaarId)}, ${q(b.impact)}, ${q(b.urgentie)}, ${q(b.inzet)}, ${b.score}, ${q(b.prioriteit)}, ${q(b.geplandeWeek || '')}, ${q(b.notitie || '')}, ${t(b.datum)})`);
 const wijzigingen = d.statuswijzigingen.map(s => `(${q(s.id)}, ${q(s.voorstelId)}, ${q(s.vanStatus)}, ${q(s.naarStatus)}, ${q(s.doorId)}, ${q(s.toelichting)}, ${t(s.datum)})`);
-const berichten = d.notificaties.map(n => `(${q(n.id)}, ${q(n.ontvangerId)}, ${q(n.voorstelId)}, ${q(n.statuswijzigingId)}, ${q(n.bericht)}, ${n.gelezen}, ${t(n.datum)})`);
+const reacties = d.reacties.map(r => `(${q(r.id)}, ${q(r.voorstelId)}, ${q(r.afzenderId)}, ${q(r.tekst)}, ${t(r.verzondenOp)})`);
+const berichten = d.notificaties.map(n => `(${q(n.id)}, ${q(n.ontvangerId)}, ${q(n.voorstelId)}, ${q(n.statuswijzigingId)}, ${q(n.reactieId)}, ${q(n.bericht)}, ${n.gelezen}, ${t(n.datum)})`);
 const max = lijst => Math.max(0, ...lijst.map(x => nr(x.id)));
 
 const seed = `-- Demodata (gegenereerd door scripts/maak-supabase-sql.js op ${nu.toISOString().slice(0, 10)}).
 create or replace function reset_demo_intern() returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  delete from notificatie where true; delete from statuswijziging where true; delete from beoordeling where true; delete from voorstel where true;
+  delete from notificatie where true; delete from reactie where true; delete from statuswijziging where true; delete from beoordeling where true; delete from voorstel where true;
   insert into medewerker (id, naam, email, rol) values
     ${medewerkers.join(',\n    ')}
     on conflict (id) do update set naam = excluded.naam, email = excluded.email, rol = excluded.rol;
@@ -45,12 +46,15 @@ begin
     ${beoordelingen.join(',\n    ')};
   insert into statuswijziging (id, voorstel_id, van_status, naar_status, door_id, toelichting, datum) values
     ${wijzigingen.join(',\n    ')};
-  insert into notificatie (id, ontvanger_id, voorstel_id, statuswijziging_id, bericht, gelezen, datum) values
+  insert into reactie (id, voorstel_id, afzender_id, tekst, verzonden_op) values
+    ${reacties.join(',\n    ')};
+  insert into notificatie (id, ontvanger_id, voorstel_id, statuswijziging_id, reactie_id, bericht, gelezen, datum) values
     ${berichten.join(',\n    ')};
   perform setval('voorstel_nr', ${max(d.voorstellen)});
   perform setval('beoordeling_nr', ${max(d.beoordelingen)});
   perform setval('statuswijziging_nr', ${max(d.statuswijzigingen)});
   perform setval('notificatie_nr', ${max(d.notificaties)});
+  perform setval('reactie_nr', ${max(d.reacties)});
 end $$;
 
 -- "Demodata herstellen" in de app: iedere ingelogde gebruiker mag dit (alleen bedoeld voor de demo).

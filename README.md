@@ -52,7 +52,7 @@ Let op: een gratis Supabase-project pauzeert na 7 dagen zonder gebruik. Open het
 
 Wachtwoorden staan nergens in de code of in GitHub. Supabase bewaart ze alleen versleuteld (gehasht); de app bewaart na het inloggen alleen een tijdelijk sessietoken in de browser, nooit het wachtwoord.
 
-**Beveiliging:** de publishable key is openbaar bedoeld. De bescherming zit in de database: gebruikers mogen alleen lezen (en alleen hun eigen berichten), en alle wijzigingen lopen via functies die de rol en de procesregels controleren (`supabase/schema.sql`). Een medewerker kan dus ook via de API geen status wijzigen.
+**Beveiliging:** de publishable key is openbaar bedoeld. De bescherming zit in de database: gebruikers mogen alleen lezen (en alleen hun eigen berichten, en alleen gesprekken bij hun eigen voorstellen; de stuurgroep ziet alle gesprekken), en alle wijzigingen lopen via functies die de rol en de procesregels controleren (`supabase/schema.sql`). Een medewerker kan dus ook via de API geen status wijzigen.
 
 ## E-mail instellen (Gmail)
 
@@ -77,14 +77,14 @@ De e-mailadressen van de medewerkers staan in `data/vbr.json` (bij de demodata z
 npm test
 ```
 
-26 tests: bedrijfsregels (`tests/logica.test.js`) en server, opslag en e-mail (`tests/server.test.js`). Bij elke push draaien ze ook automatisch via GitHub Actions.
+35 tests: bedrijfsregels (`tests/logica.test.js`), server, opslag en e-mail (`tests/server.test.js`) en de database met rechten (`tests/supabase.test.js`, draait als `VBR_PG_URL` is gezet). Bij elke push draaien ze ook automatisch via GitHub Actions.
 
 ## Drie kernfunctionaliteiten
 
 | # | Kernfunctionaliteit | Requirement | Waar in de code |
 |---|---|---|---|
 | 1 | Voorstel indienen via een formulier met max. 5 velden | R1 | `schermIndienen()` in `public/js/app.js`, `valideerVoorstel()` en `dienVoorstelIn()` in `public/js/logica.js` |
-| 2 | Beoordelen en prioriteren (impact, urgentie, inzet) met automatische terugkoppeling (in de app en per e-mail) bij elke statuswijziging | R2, R3 | `openVoorstel()` in `public/js/app.js`, `berekenPrioriteit()`, `slaBeoordelingOp()` en `wijzigStatus()` in `public/js/logica.js`, `server/mail.js` |
+| 2 | Beoordelen en prioriteren (impact, urgentie, inzet) met automatische terugkoppeling (in de app en per e-mail) bij elke statuswijziging, plus een privé gesprek tussen indiener en stuurgroep per voorstel (iteratie 5) | R2, R3, R7 | `openVoorstel()` in `public/js/app.js`, `berekenPrioriteit()`, `slaBeoordelingOp()` en `wijzigStatus()` in `public/js/logica.js`, `server/mail.js`, gesprek: `tekenGesprek()` in `app.js` en `plaatsReactie()`/`bewerkReactie()` in `logica.js` |
 | 3 | Dashboard voor management | R4 | `schermDashboard()` in `public/js/app.js`, `dashboardCijfers()` in `public/js/logica.js` |
 
 ## Projectstructuur

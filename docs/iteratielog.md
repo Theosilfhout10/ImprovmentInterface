@@ -97,7 +97,40 @@ Platformkeuze voor gedeelde opslag, login via Microsoft 365 en echte meldingen (
 **Betekenis voor MVP**
 - De architectuur "statische app + beheerde database met regels in de database" werkt en is een serieuze MVP-optie naast Power Apps/SharePoint. Te beslissen in het Plan van Aanpak (E6): hosting binnen Egency of Supabase (privacy, verwerkersovereenkomst, beheer), Microsoft 365-login, e-mail of Teams voor meldingen.
 
-## Iteratie 5 – na feedback stuurgroep en testers (in te vullen)
+## Iteratie 5a – gesprek per voorstel (26-11-2026)
+
+**Aanleiding (Theo):** "Kan je toevoegen dat gebruikers kunnen chatten in een verbetervoorstel zodat de stuurgroep vragen kan stellen per verbetervoorstel?"
+
+**Afspraken vooraf (vragen gesteld en beantwoord door Theo, 26-11-2026)**
+- Een 7e entiteit mag ("wordt niet moeilijk over gedaan").
+- Het gesprek is privé tussen de indiener en de behandelaar (stuurgroep). Management en andere medewerkers zien het niet.
+- Live, zonder verversen.
+- Melding in de app bij een nieuw bericht, geen e-mail.
+- Niet verwijderen; bewerken mag tot 15 minuten na verzenden.
+- Ongelezen-indicator bij het voorstel in de lijsten.
+
+**Afwegingen**
+- *Eigen entiteit of reacties opslaan in STATUSWIJZIGING?* Eigen entiteit REACTIE: andere rechten en levensloop dan een statuswijziging. Kost de 6-entiteitengrens; met Theo afgestemd.
+- *Melding: nieuwe tabel of NOTIFICATIE hergebruiken?* NOTIFICATIE hergebruikt, met een verwijzing naar óf een statuswijziging óf een reactie. Zo werken de bel, "Alles gelezen" en de live melding zonder extra code, en blijft het datamodel op 7.
+- *Wie krijgt een melding?* Schrijft de indiener, dan de hele stuurgroep (je weet niet wie het oppakt); schrijft een stuurgroeplid, dan alleen de indiener. Collega-stuurgroepleden zien het gesprek wel, maar krijgen geen melding van elkaar (minder ruis).
+- *Beveiliging:* lezen via Row Level Security (`mag_gesprek_zien`), schrijven en bewerken alleen via de functies `plaats_reactie` en `bewerk_reactie`, die dezelfde regels afdwingen als `logica.js`. Ook via de API kan een collega dus niet meelezen of andermans bericht aanpassen.
+- *Live typen:* een live update tekent alleen de berichtenlijst opnieuw, zodat een half getypt bericht niet verdwijnt.
+
+**Wat is aangepast**
+- `public/js/logica.js`: `magGesprekZien`, `plaatsReactie`, `magReactieBewerken`, `bewerkReactie`.
+- `supabase/schema.sql` / `installatie.sql`: tabel `reactie`, aangepaste `notificatie`, RLS-regel, twee functies, live updates; demodata met twee voorbeeldgesprekken.
+- `server/app.js`: `POST /api/voorstellen/:id/reacties` en `PUT /api/reacties/:id`.
+- Schermen: blok "Gesprek" in het voorstelvenster (chatballonnen, Enter verstuurt, "Bewerken" bij eigen berichten tot 15 minuten), rood bolletje met aantal ongelezen reacties in Mijn voorstellen, Beoordelen en Dashboard.
+- Tests: 7 unittests, 1 API-test en databasetests voor R7 (35 tests in totaal). ERD, rollen-tabel en testplan bijgewerkt.
+
+**Nieuwe risico's**
+- In de Node-versie zonder echte login (prototype) stuurt de server alle data naar de browser; de privacy van het gesprek is daar alleen in de schermen geregeld. Online (Supabase) dwingt de database het af.
+- Een gesprek kan een "achterdeur" worden voor beslissingen. Afspraak: besluiten blijven via een statuswijziging met toelichting lopen, zodat ze in de historie en het dashboard staan.
+
+**Betekenis voor MVP**
+- Meldingen via Teams of e-mail bij een nieuwe reactie is een logische vervolgstap zodra de Microsoft 365-koppeling er is.
+
+## Iteratie 5b – na feedback stuurgroep en testers (in te vullen)
 
 **Doel:**
 **Feedback ontvangen van (wie, wanneer):**

@@ -104,3 +104,20 @@ test('Mail: zonder Gmail-instellingen staat de mailer in voorbeeldstand', () => 
   assert.equal(maakMailer({}).info().stand, 'voorbeeld');
   assert.equal(maakMailer({ GMAIL_USER: 'a@gmail.com', GMAIL_APP_PASSWORD: 'abcd efgh ijkl mnop' }).info().stand, 'gmail');
 });
+
+test('R7 API: gesprek per voorstel, met meldingen en bewerken', async () => {
+  const s = await startServer();
+  const r = await s.api('POST', '/api/voorstellen/v3/reacties', 'm4', { tekst: 'Welke versie draait er nu?' });
+  assert.equal(r.status, 200);
+  const data = (await s.api('GET', '/api/data')).json.data;
+  assert.ok(data.notificaties.some(n => n.reactieId === r.json.reactie.id && n.ontvangerId === 'm3'));
+  const bewerkt = await s.api('PUT', `/api/reacties/${r.json.reactie.id}`, 'm4', { tekst: 'Welke firmwareversie draait er nu?' });
+  assert.equal(bewerkt.status, 200);
+  assert.ok(bewerkt.json.reactie.bewerktOp);
+  const vreemd = await s.api('POST', '/api/voorstellen/v3/reacties', 'm1', { tekst: 'Mag ik meepraten?' });
+  assert.equal(vreemd.status, 400);
+  assert.match(vreemd.json.fout, /Alleen de indiener en de stuurgroep/);
+  assert.equal((await s.api('PUT', `/api/reacties/${r.json.reactie.id}`, 'm3', { tekst: 'x' })).status, 400);
+  assert.equal(s.mailer.postvak().length, 0); // reacties sturen (nog) geen e-mail
+  await s.stop();
+});

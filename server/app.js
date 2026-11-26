@@ -87,6 +87,19 @@ function maakApp({ opslag, mailer, demoModus = true }) {
     return { ...uitkomst, indiener: naamVan(opslag.lees(), opslag.lees().voorstellen.find(v => v.id === req.params.id).indienerId) };
   }));
 
+  // Iteratie 5: gesprek per voorstel (alleen indiener en stuurgroep; regels in logica.js).
+  app.post('/api/voorstellen/:id/reacties', verwerk(async req => {
+    const id = gebruikerUit(req);
+    const uitkomst = await opslag.wijzig(d => VBR.plaatsReactie(d, req.params.id, (req.body || {}).tekst, id));
+    return { reactie: uitkomst.reactie };
+  }));
+
+  app.put('/api/reacties/:id', verwerk(async req => {
+    const id = gebruikerUit(req);
+    const reactie = await opslag.wijzig(d => VBR.bewerkReactie(d, req.params.id, (req.body || {}).tekst, id));
+    return { reactie };
+  }));
+
   app.post('/api/notificaties/gelezen', verwerk(async req => {
     const id = gebruikerUit(req);
     const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
