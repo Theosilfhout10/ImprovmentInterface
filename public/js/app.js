@@ -5,7 +5,7 @@
  *   1. Gegevensbron (adapter)  – praat met de server, of werkt los in de browser (demo/preview)
  *   2. Hulpfuncties            – o.a. veilig tonen van tekst (escapen tegen XSS)
  *   3. Navigatie per rol       – welk menu ziet wie
- *   4. Schermen                – Nieuw voorstel, Mijn voorstellen, Beoordelen, Dashboard
+ *   4. Schermen                – Nieuw voorstel, Mijn voorstellen, Beoordelen, Dashboard, Gesprekken
  *   5. Vensters                – voorstel (bekijken, gesprek, beoordelen, status), berichten, verzonden e-mails
  *
  * De procesregels staan in logica.js (VBR.*). Dit bestand roept die alleen aan.
@@ -189,6 +189,7 @@
   let huidigScherm = null;
   let beoordeelFilter = 'Te beoordelen';
   let openVoorstelId = null;
+  let gesprekKeuze = null;       // het gesprek (voorstel-id) dat open staat in de tab Gesprekken
 
   /** Volgorde: eigen Node-server (lokaal of intern) > Supabase (online met accounts) > demo in de browser. */
   async function kiesBron() {
@@ -268,7 +269,7 @@
   // ===== 3. Navigatie per rol ===============================================
   /** Iedereen mag indienen; de stuurgroep beoordeelt; stuurgroep en management zien het dashboard. */
   function menuVoorRol(rol) {
-    const basis = [['indienen', 'Nieuw voorstel'], ['mijn', 'Mijn voorstellen']];
+    const basis = [['indienen', 'Nieuw voorstel'], ['mijn', 'Mijn voorstellen'], ['gesprekken', 'Gesprekken']];
     if (rol === 'stuurgroep') return [['beoordelen', 'Beoordelen'], ['dashboard', 'Dashboard']].concat(basis);
     if (rol === 'management') return [['dashboard', 'Dashboard']].concat(basis);
     return basis;
@@ -300,8 +301,11 @@
 
     const items = menuVoorRol(gebruiker().rol);
     if (!items.some(([s]) => s === huidigScherm)) huidigScherm = items[0][0];
-    $('#menu').innerHTML = items.map(([s, t]) =>
-      `<button type="button" data-scherm="${s}"${s === huidigScherm ? ' aria-current="page"' : ''}>${esc(t)}</button>`).join('');
+    const ongelezenChat = mijnOngelezen().filter(n => n.reactieId).length;
+    $('#menu').innerHTML = items.map(([s, t]) => {
+      const teller = s === 'gesprekken' && ongelezenChat ? `<span class="tab-teller" aria-label="${ongelezenChat} ongelezen">${ongelezenChat > 9 ? '9+' : ongelezenChat}</span>` : '';
+      return `<button type="button" data-scherm="${s}"${s === huidigScherm ? ' aria-current="page"' : ''}>${esc(t)}${teller}</button>`;
+    }).join('');
   }
 
   function tekenVoet() {
@@ -317,7 +321,7 @@
     $('#voet').innerHTML = delen.join('');
   }
 
-  const SCHERMEN = { indienen: () => schermIndienen(), mijn: () => schermMijn(), beoordelen: () => schermBeoordelen(), dashboard: () => schermDashboard() };
+  const SCHERMEN = { indienen: () => schermIndienen(), mijn: () => schermMijn(), beoordelen: () => schermBeoordelen(), dashboard: () => schermDashboard(), gesprekken: () => schermGesprekken() };
   function toon(scherm) {
     if (scherm) huidigScherm = scherm;
     tekenKop();
@@ -341,7 +345,8 @@
     try { await herlaad(); } catch (e) { return; } // bij de volgende wijziging of poging opnieuw
     tekenKop();
     tekenVoet();
-    if (huidigScherm !== 'indienen' && !aanHetTypen()) SCHERMEN[huidigScherm]();
+    if (huidigScherm === 'gesprekken') schermGesprekken(); // werkt alleen lijst en berichten bij, nooit het tekstvak
+    else if (huidigScherm !== 'indienen' && !aanHetTypen()) SCHERMEN[huidigScherm]();
     if ($('#venster').open && !vensterAangeraakt && !aanHetTypen()) {
       if (vensterSoort === 'voorstel' && openVoorstelId) openVoorstel(openVoorstelId);
       if (vensterSoort === 'berichten') openBerichten();
@@ -350,10 +355,13 @@
       tekenGesprek(openVoorstelId);
       markeerGesprekGelezen(openVoorstelId);
     }
-    // Geen melding voor reacties in het gesprek dat je op dit moment open hebt: die zie je al.
-    const gesprekOpen = $('#venster').open && vensterSoort === 'voorstel' ? openVoorstelId : null;
-    const nieuw = mijnOngelezen().filter(n => !alGezien.has(n.id) && !(n.reactieId && n.voorstelId === gesprekOpen)).sort((a, b) => b.datum.localeCompare(a.datum));
-    if (nieuw.length) toonMelding(nieuw.length === 1 ? nieuw[0].bericht : `${nieuw.length} nieuwe berichten`);
+    // Pop-up per nieuwe melding, behalve voor het voorstel of gesprek dat je op dit moment al open hebt: dat zie je al.
+    const nuOpen = new Set([
+      $('#venster').open && vensterSoort === 'voorstel' ? openVoorstelId : null,
+      huidigScherm === 'gesprekken' ? gesprekKeuze : null,
+    ].filter(Boolean));
+    mijnOngelezen().filter(n => !alGezien.has(n.id) && !nuOpen.has(n.voorstelId))
+      .sort((a, b) => a.datum.localeCompare(b.datum)).slice(-MAX_POPUPS).forEach(toonPopup);
   }
 
   // ===== Inloggen (alleen online met Supabase) ==============================
@@ -578,6 +586,134 @@
       </div>`;
   }
 
+  // --- Gesprekken: alle gesprekken waar je deelnemer van bent (iteratie 5b) ---
+  /*
+   * Links de lijst, rechts het open gesprek (op een telefoon: eerst de lijst, dan het gesprek).
+   * Bij een live update worden alleen de lijst en de berichten opnieuw getekend, nooit het tekstvak.
+   */
+  function schermGesprekken() {
+    if (gesprekKeuze && !VBR.magGesprekZien(data, gesprekKeuze, huidigeGebruikerId)) gesprekKeuze = null;
+    const v = gesprekKeuze && data.voorstellen.find(x => x.id === gesprekKeuze);
+    const scherm = $('#gesprekkenScherm');
+    if (scherm && scherm.dataset.open === (gesprekKeuze || '')) {
+      $('#gesprekkenLijst').innerHTML = gesprekkenLijstHtml();
+      if (v) { $('#paneelMeta').innerHTML = paneelMeta(v); tekenGesprek(v.id); markeerGesprekGelezen(v.id); }
+      return;
+    }
+    $('#inhoud').innerHTML = `
+      <div class="paginakop met-knop">
+        <div><h1>Gesprekken</h1><p>Vragen en antwoorden over voorstellen, tussen indiener en stuurgroep.</p></div>
+        <button type="button" class="knop zacht" data-actie="nieuwGesprek">Nieuw gesprek</button>
+      </div>
+      <div id="gesprekkenScherm" class="gesprekken${v ? ' met-keuze' : ''}" data-open="${esc(gesprekKeuze || '')}">
+        <div class="kaart gesprekken-lijst"><ul class="lijst" id="gesprekkenLijst">${gesprekkenLijstHtml()}</ul></div>
+        ${v ? `
+        <section class="kaart gesprek gesprekken-paneel" data-gesprek="${esc(v.id)}" aria-label="Gesprek over ${esc(v.titel)}">
+          <div class="paneel-kop">
+            <button type="button" class="tekstknop terug" data-gesprek-kies="">‹ Gesprekken</button>
+            <div class="paneel-titel"><strong>${esc(v.titel)}</strong><span id="paneelMeta">${paneelMeta(v)}</span></div>
+            <button type="button" class="tekstknop" data-voorstel="${esc(v.id)}">Voorstel bekijken</button>
+          </div>
+          ${gesprekInhoud('tab')}
+          <p class="paneel-voet">${privacyZin(v)}</p>
+        </section>` : `
+        <div class="kaart gesprekken-paneel leeg-paneel"><div class="leeg"><strong>Kies een gesprek</strong>of start een nieuw gesprek over een voorstel.</div></div>`}
+      </div>`;
+    if (v) {
+      const blok = $('.gesprekken-paneel[data-gesprek]');
+      tekenGesprek(v.id, true);
+      koppelReactieForm(blok, v.id);
+      if (!matchMedia('(pointer: coarse)').matches) blok.querySelector('textarea').focus({ preventScroll: true });
+      markeerGesprekGelezen(v.id);
+    }
+  }
+  const paneelMeta = v => `${esc(naamVan(v.indienerId))} · ${statusPil(v.status)}`;
+  const kort = (tekst, max) => tekst.length > max ? tekst.slice(0, max - 1).trimEnd() + '…' : tekst;
+
+  function gesprekkenLijstHtml() {
+    const lijst = VBR.gesprekkenVoor(data, huidigeGebruikerId);
+    if (!lijst.length) return `<li><div class="leeg"><strong>Nog geen gesprekken</strong>${gebruiker().rol === 'stuurgroep' ? 'Stel een vraag bij een voorstel met "Nieuw gesprek".' : 'Heeft de stuurgroep een vraag over je voorstel, dan zie je die hier.'}</div></li>`;
+    return lijst.map(g => {
+      const wie = g.laatste.afzenderId === huidigeGebruikerId ? 'Jij' : naamVan(g.laatste.afzenderId).split(' ')[0];
+      const ongelezen = ongelezenGesprek(g.voorstel.id).length;
+      return `<li><button type="button" class="rij gesprek-rij${ongelezen ? ' ongelezen' : ''}" data-gesprek-kies="${esc(g.voorstel.id)}"${g.voorstel.id === gesprekKeuze ? ' aria-current="true"' : ''}>
+        <span class="rij-tekst"><span class="rij-titel">${esc(g.voorstel.titel)}</span><span class="rij-meta">${esc(wie)}: ${esc(kort(g.laatste.tekst, 90))}</span></span>
+        <span class="rij-rechts gesprek-rij-rechts"><span class="wanneer">${datum(g.laatste.verzondenOp)}</span>${gesprekBadge(g.voorstel.id)}</span></button></li>`;
+    }).join('');
+  }
+
+  /** Venster om een gesprek te starten: kies een voorstel waar je deelnemer van bent. */
+  function openNieuwGesprek() {
+    const kandidaten = data.voorstellen.filter(v => VBR.magGesprekZien(data, v.id, huidigeGebruikerId))
+      .sort((a, b) => (VBR.OPEN_STATUSSEN.includes(b.status) - VBR.OPEN_STATUSSEN.includes(a.status)) || b.ingediendOp.localeCompare(a.ingediendOp));
+    const heeftGesprek = new Set(data.reacties.map(r => r.voorstelId));
+    const rijen = kandidaten.map(v => `<li data-zoek="${esc((v.titel + ' ' + naamVan(v.indienerId)).toLowerCase())}"><button type="button" class="rij" data-gesprek-kies="${esc(v.id)}">
+      <span class="rij-tekst"><span class="rij-titel">${esc(v.titel)}</span><span class="rij-meta">${esc(naamVan(v.indienerId))}${heeftGesprek.has(v.id) ? ' · gesprek loopt al' : ''}</span></span>
+      <span class="rij-rechts">${statusPil(v.status)}</span>${CHEVRON}</button></li>`).join('');
+    const venster = openVenster('Nieuw gesprek', `
+      <p style="margin:0;color:var(--tekst-2)">${gebruiker().rol === 'stuurgroep' ? 'Over welk voorstel wil je iets vragen?' : 'Over welk van je voorstellen wil je iets zeggen of vragen?'}</p>
+      ${kandidaten.length > 6 ? '<div class="veld" style="padding:0"><label for="g-zoek" class="visueel-verborgen">Zoeken</label><input id="g-zoek" type="search" placeholder="Zoek op titel of naam" autocomplete="off"></div>' : ''}
+      <div class="kaart">${kandidaten.length ? `<ul class="lijst" id="nieuwGesprekLijst">${rijen}</ul>` : '<div class="leeg">Je hebt nog geen voorstellen ingediend.</div>'}</div>`, 'nieuwGesprek');
+    const zoek = venster.querySelector('#g-zoek');
+    if (zoek) zoek.addEventListener('input', () => {
+      const q = zoek.value.trim().toLowerCase();
+      venster.querySelectorAll('#nieuwGesprekLijst > li').forEach(li => { li.hidden = q && !li.dataset.zoek.includes(q); });
+    });
+  }
+
+  // --- Pop-ups bij een update (iteratie 5b) ---
+  const MAX_POPUPS = 3;
+  const POPUP_DUUR = 8000; // ms
+
+  /** Rustige kaart rechtsboven bij een nieuwe statuswijziging of reactie, met een knop Bekijken. */
+  function toonPopup(n) {
+    const v = data.voorstellen.find(x => x.id === n.voorstelId);
+    if (!v) return;
+    let kop, tekst;
+    if (n.reactieId) {
+      const r = data.reacties.find(x => x.id === n.reactieId);
+      kop = `${r ? naamVan(r.afzenderId) : 'Iemand'} reageerde`;
+      tekst = r ? kort(r.tekst, 110) : '';
+    } else {
+      const sw = data.statuswijzigingen.find(x => x.id === n.statuswijzigingId);
+      kop = sw ? (sw.vanStatus === null ? 'Voorstel ontvangen' : `Nieuwe status: ${sw.naarStatus === 'Overgedragen aan Freshservice' ? 'Overgedragen' : sw.naarStatus}`) : 'Update';
+      tekst = sw && sw.toelichting ? kort(sw.toelichting, 110) : '';
+    }
+    const houder = $('#popups');
+    const el = document.createElement('div');
+    el.className = 'popup';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `<div class="popup-tekst"><span class="popup-voorstel">${esc(v.titel)}</span><strong>${esc(kop)}</strong>${tekst ? `<span class="popup-bericht">${esc(tekst)}</span>` : ''}</div>
+      <div class="popup-knoppen"><button type="button" class="knop zacht" data-popup="bekijk">Bekijken</button><button type="button" class="popup-sluit" data-popup="sluit" aria-label="Sluiten">×</button></div>`;
+    houder.appendChild(el);
+    while (houder.children.length > MAX_POPUPS) houder.firstElementChild.remove();
+    // Als "popover" in de bovenste laag, zodat de pop-up ook boven een open venster staat.
+    try { if (houder.matches(':popover-open')) houder.hidePopover(); houder.showPopover(); } catch (e) { /* oudere browser: gewoon fixed */ }
+    // Verdwijnt na 8 seconden; met de muis erop blijft hij staan.
+    let timer;
+    const start = () => { timer = setTimeout(() => sluitPopup(el), POPUP_DUUR); };
+    el.addEventListener('mouseenter', () => clearTimeout(timer));
+    el.addEventListener('mouseleave', start);
+    el.addEventListener('focusin', () => clearTimeout(timer));
+    start();
+    el.querySelector('[data-popup="sluit"]').addEventListener('click', () => sluitPopup(el));
+    el.querySelector('[data-popup="bekijk"]').addEventListener('click', async () => {
+      sluitPopup(el);
+      if (n.reactieId) { sluitVenster(); gesprekKeuze = v.id; toon('gesprekken'); window.scrollTo(0, 0); return; }
+      if (!n.gelezen) { await doe(() => bron.markeerGelezen([n.id])).catch(() => {}); tekenKop(); }
+      openVoorstel(v.id);
+    });
+  }
+  function sluitPopup(el) {
+    if (!el.isConnected) return;
+    el.classList.add('weg');
+    setTimeout(() => {
+      el.remove();
+      const houder = $('#popups');
+      if (!houder.children.length) { try { houder.hidePopover(); } catch (e) { /* geen popover-ondersteuning */ } }
+    }, 200);
+  }
+
   // ===== 5. Vensters ========================================================
   function openVenster(titel, inhoud, soort) {
     const v = $('#venster');
@@ -594,7 +730,7 @@
     const v = data.voorstellen.find(x => x.id === voorstelId);
     if (!v) return;
     // Een half getypt bericht in het gesprek bewaren als het venster opnieuw wordt getekend.
-    const concept = openVoorstelId === voorstelId && $('#r-tekst') ? $('#r-tekst').value : '';
+    const concept = openVoorstelId === voorstelId && $('#r-tekst-venster') ? $('#r-tekst-venster').value : '';
     openVoorstelId = voorstelId;
     const isStuurgroep = gebruiker().rol === 'stuurgroep';
     const b = beoordelingVan(v.id);
@@ -616,17 +752,10 @@
       </dl></div>
 
       ${VBR.magGesprekZien(data, v.id, huidigeGebruikerId) ? `
-      <section class="groep gesprek" id="gesprek">
+      <section class="groep gesprek" id="gesprek" data-gesprek="${esc(v.id)}">
         <h4 class="groep-titel">Gesprek</h4>
-        <div class="kaart">
-          <ol class="gesprek-lijst" id="gesprekLijst" aria-live="polite"></ol>
-          <form id="reactieForm" class="gesprek-invoer" novalidate>
-            <label for="r-tekst" class="visueel-verborgen">Bericht</label>
-            <textarea id="r-tekst" rows="1" maxlength="${VBR.MAX_REACTIE_TEKENS}" placeholder="Typ een bericht"></textarea>
-            <button class="knop" type="submit">Verstuur</button>
-          </form>
-        </div>
-        <p class="groep-voet">Alleen zichtbaar voor ${v.indienerId === huidigeGebruikerId ? 'jou' : esc(naamVan(v.indienerId))} en de stuurgroep. Je kunt een bericht tot ${VBR.BEWERK_MINUTEN} minuten na verzenden bewerken.</p>
+        <div class="kaart">${gesprekInhoud('venster')}</div>
+        <p class="groep-voet">${privacyZin(v)}</p>
       </section>` : ''}
 
       ${isStuurgroep && vervolg.length ? `
@@ -659,8 +788,8 @@
 
     if (venster.querySelector('#gesprek')) {
       tekenGesprek(v.id, true);
-      koppelReactieForm(v.id);
-      if (concept) { $('#r-tekst').value = concept; groei($('#r-tekst')); }
+      koppelReactieForm(venster.querySelector('#gesprek'), v.id);
+      if (concept) { $('#r-tekst-venster').value = concept; groei($('#r-tekst-venster')); }
       markeerGesprekGelezen(v.id);
       if (naarGesprek) venster.querySelector('#gesprek').scrollIntoView({ block: 'start' });
     }
@@ -693,30 +822,44 @@
   }
 
   // ----- Gesprek per voorstel (iteratie 5) -----
-  /** Tekent alleen de berichtenlijst van het gesprek, zodat live updates een half getypt bericht niet wissen. */
+  /*
+   * Hetzelfde gesprek kan op twee plekken staan: in het voorstelvenster en in de tab Gesprekken.
+   * Elk blok heeft data-gesprek="<voorstel-id>"; tekenGesprek werkt alle blokken van dat voorstel bij.
+   */
+  const privacyZin = v => `Alleen zichtbaar voor ${v.indienerId === huidigeGebruikerId ? 'jou' : esc(naamVan(v.indienerId))} en de stuurgroep. Je kunt een bericht tot ${VBR.BEWERK_MINUTEN} minuten na verzenden bewerken.`;
+  const gesprekInhoud = plek => `
+    <ol class="gesprek-lijst" aria-live="polite"></ol>
+    <form class="gesprek-invoer" novalidate>
+      <label for="r-tekst-${plek}" class="visueel-verborgen">Bericht</label>
+      <textarea id="r-tekst-${plek}" rows="1" maxlength="${VBR.MAX_REACTIE_TEKENS}" placeholder="Typ een bericht"></textarea>
+      <button class="knop" type="submit">Verstuur</button>
+    </form>`;
+
+  /** Tekent alleen de berichtenlijst(en) van het gesprek, zodat live updates een half getypt bericht niet wissen. */
   function tekenGesprek(voorstelId, naarOnder) {
-    const lijst = $('#gesprekLijst');
-    if (!lijst || lijst.querySelector('.bewerk-form')) return; // niet overschrijven terwijl iemand een bericht bewerkt
-    const opBodem = naarOnder || lijst.scrollHeight - lijst.scrollTop - lijst.clientHeight < 40;
-    const reacties = data.reacties.filter(r => r.voorstelId === voorstelId).sort((a, b) => a.verzondenOp.localeCompare(b.verzondenOp));
-    lijst.innerHTML = reacties.length ? reacties.map(r => {
-      const eigen = r.afzenderId === huidigeGebruikerId;
-      const afzender = data.medewerkers.find(m => m.id === r.afzenderId) || {};
-      return `<li class="reactie${eigen ? ' eigen' : ''}" data-reactie="${esc(r.id)}">
-        <div class="reactie-meta">${eigen ? 'Jij' : esc(afzender.naam || 'Onbekend')}${!eigen && afzender.rol === 'stuurgroep' ? ' · stuurgroep' : ''}</div>
-        <div class="ballon">${esc(r.tekst)}</div>
-        <div class="reactie-meta">${datumTijd(r.verzondenOp)}${r.bewerktOp ? ' · bewerkt' : ''}${VBR.magReactieBewerken(r, huidigeGebruikerId) ? ` · <button type="button" class="tekstknop" data-bewerk="${esc(r.id)}">Bewerken</button>` : ''}</div>
-      </li>`;
-    }).join('') : '<li class="gesprek-leeg">Nog geen berichten. Vragen over dit voorstel stel je hier.</li>';
-    if (opBodem) lijst.scrollTop = lijst.scrollHeight;
-    lijst.querySelectorAll('[data-bewerk]').forEach(knop => knop.addEventListener('click', () => startBewerken(voorstelId, knop.dataset.bewerk)));
+    document.querySelectorAll(`[data-gesprek="${CSS.escape(voorstelId)}"] .gesprek-lijst`).forEach(lijst => {
+      if (lijst.querySelector('.bewerk-form')) return; // niet overschrijven terwijl iemand een bericht bewerkt
+      const opBodem = naarOnder || lijst.scrollHeight - lijst.scrollTop - lijst.clientHeight < 40;
+      const reacties = data.reacties.filter(r => r.voorstelId === voorstelId).sort((a, b) => a.verzondenOp.localeCompare(b.verzondenOp));
+      lijst.innerHTML = reacties.length ? reacties.map(r => {
+        const eigen = r.afzenderId === huidigeGebruikerId;
+        const afzender = data.medewerkers.find(m => m.id === r.afzenderId) || {};
+        return `<li class="reactie${eigen ? ' eigen' : ''}" data-reactie="${esc(r.id)}">
+          <div class="reactie-meta">${eigen ? 'Jij' : esc(afzender.naam || 'Onbekend')}${!eigen && afzender.rol === 'stuurgroep' ? ' · stuurgroep' : ''}</div>
+          <div class="ballon">${esc(r.tekst)}</div>
+          <div class="reactie-meta">${datumTijd(r.verzondenOp)}${r.bewerktOp ? ' · bewerkt' : ''}${VBR.magReactieBewerken(r, huidigeGebruikerId) ? ` · <button type="button" class="tekstknop" data-bewerk="${esc(r.id)}">Bewerken</button>` : ''}</div>
+        </li>`;
+      }).join('') : '<li class="gesprek-leeg">Nog geen berichten. Vragen over dit voorstel stel je hier.</li>';
+      if (opBodem) lijst.scrollTop = lijst.scrollHeight;
+      lijst.querySelectorAll('[data-bewerk]').forEach(knop => knop.addEventListener('click', () => startBewerken(lijst, voorstelId, knop.dataset.bewerk)));
+    });
   }
 
   /** Laat het tekstvak meegroeien met de tekst (tot een maximum, daarna scrollen). */
   function groei(veld) { veld.style.height = 'auto'; veld.style.height = Math.min(veld.scrollHeight, 160) + 'px'; }
 
-  function koppelReactieForm(voorstelId) {
-    const form = $('#reactieForm'), veld = $('#r-tekst');
+  function koppelReactieForm(blok, voorstelId) {
+    const form = blok.querySelector('.gesprek-invoer'), veld = form.querySelector('textarea');
     veld.addEventListener('input', () => groei(veld));
     // Enter verstuurt, Shift+Enter is een nieuwe regel (op een telefoon gebruik je de knop).
     veld.addEventListener('keydown', e => {
@@ -733,15 +876,16 @@
         veld.value = ''; groei(veld);
         tekenGesprek(voorstelId, true);
         tekenKop();
+        if (huidigScherm === 'gesprekken') schermGesprekken(); // lijst links: dit gesprek naar boven
       } catch (err) { /* melding al getoond, tekst blijft staan */ }
       knop.disabled = false;
       veld.focus();
     });
   }
 
-  function startBewerken(voorstelId, reactieId) {
+  function startBewerken(lijst, voorstelId, reactieId) {
     const r = data.reacties.find(x => x.id === reactieId);
-    const li = document.querySelector(`#gesprekLijst [data-reactie="${CSS.escape(reactieId)}"]`);
+    const li = lijst.querySelector(`[data-reactie="${CSS.escape(reactieId)}"]`);
     if (!r || !li) return;
     li.innerHTML = `<form class="bewerk-form">
       <label for="bewerk-${esc(r.id)}" class="visueel-verborgen">Bericht bewerken</label>
@@ -751,7 +895,7 @@
     const form = li.querySelector('form'), veld = form.querySelector('textarea');
     groei(veld); veld.focus(); veld.setSelectionRange(veld.value.length, veld.value.length);
     veld.addEventListener('input', () => groei(veld));
-    form.querySelector('[data-annuleer]').addEventListener('click', () => { li.innerHTML = ''; form.remove(); tekenGesprek(voorstelId); });
+    form.querySelector('[data-annuleer]').addEventListener('click', () => { form.remove(); tekenGesprek(voorstelId); });
     form.addEventListener('submit', async e => {
       e.preventDefault();
       try {
@@ -767,7 +911,7 @@
     if (!ids.length) return;
     try { await bron.markeerGelezen(ids); await herlaad(); } catch (e) { return; }
     tekenKop();
-    if (huidigScherm !== 'indienen') SCHERMEN[huidigScherm](); // bolletje in de lijst achter het venster bijwerken
+    if (huidigScherm !== 'indienen') SCHERMEN[huidigScherm](); // bolletjes in de lijst bijwerken
   }
 
   /** Berichten van de ingelogde gebruiker (de terugkoppeling, ook verstuurd per e-mail). */
@@ -793,11 +937,12 @@
 
   // ===== Gebeurtenissen =====================================================
   document.addEventListener('click', async e => {
-    const doel = e.target.closest('[data-scherm], [data-filter], [data-voorstel], [data-sluit], [data-actie]');
+    const doel = e.target.closest('[data-scherm], [data-filter], [data-voorstel], [data-sluit], [data-actie], [data-gesprek-kies]');
     if (!doel) return;
     if (doel.dataset.sluit !== undefined) { sluitVenster(); return; }
     if (doel.dataset.scherm) { sluitVenster(); toon(doel.dataset.scherm); window.scrollTo(0, 0); return; }
     if (doel.dataset.filter) { beoordeelFilter = doel.dataset.filter; toon(); return; }
+    if (doel.dataset.gesprekKies !== undefined) { sluitVenster(); gesprekKeuze = doel.dataset.gesprekKies || null; toon('gesprekken'); window.scrollTo(0, 0); return; }
     if (doel.dataset.voorstel) {
       if (doel.dataset.notificatie) {
         const n = data.notificaties.find(x => x.id === doel.dataset.notificatie);
@@ -809,9 +954,10 @@
     }
     const actie = doel.dataset.actie;
     if (actie === 'allesGelezen') { await doe(() => bron.markeerGelezen([])).catch(() => {}); tekenKop(); openBerichten(); }
+    if (actie === 'nieuwGesprek') openNieuwGesprek();
     if (actie === 'postvak') openPostvak().catch(err => toonMelding(err.message, true));
     if (actie === 'reset') { await doe(() => bron.reset(), 'Demodata hersteld.').catch(() => {}); sluitVenster(); toon(); }
-    if (actie === 'uitloggen') { data = null; await bron.uitloggen().catch(() => {}); liveStatus = ''; toonLogin(); }
+    if (actie === 'uitloggen') { data = null; gesprekKeuze = null; $('#popups').innerHTML = ''; await bron.uitloggen().catch(() => {}); liveStatus = ''; toonLogin(); }
   });
   // Typen in het gesprek telt niet als "aangeraakt": dat tekstvak wordt bij live updates toch niet overschreven.
   const telt = e => !e.target.closest('.gesprek');
@@ -823,6 +969,8 @@
     huidigeGebruikerId = e.target.value;
     try { localStorage.setItem(GEBRUIKER_SLEUTEL, huidigeGebruikerId); } catch (err) { /* negeren */ }
     huidigScherm = null;
+    gesprekKeuze = null;
+    $('#popups').innerHTML = '';
     sluitVenster();
     toon();
   });

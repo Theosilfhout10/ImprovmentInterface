@@ -19,7 +19,7 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | R4 | Management ziet op een **dashboard** het aantal voorstellen per status, categorie en prioriteit, de reactietijd en voorstellen die te lang wachten. | Must | Projectplan §4 | Test R4, TC-06 |
 | R5 | Een indiener ziet in "Mijn voorstellen" de status en volledige historie van zijn/haar voorstellen. | Should | Voorstel: "collega's moeten zien dat er iets gebeurt" | TC-05 |
 | R6 | Een goedgekeurd en ingepland voorstel kan worden gemarkeerd als "Overgedragen aan Freshservice". | Could | Afbakening: uitvoering via Freshservice | TC-04 |
-| R7 | Per voorstel is er een **gesprek** tussen de indiener en de stuurgroep, zodat de stuurgroep vragen kan stellen. Het gesprek is privé (management en andere medewerkers zien het niet), werkt live, geeft de andere partij een melding met een ongelezen-indicator in de lijsten, en een eigen bericht is tot **15 minuten** na verzenden te bewerken (niet te verwijderen). | Should | Wens Theo/stuurgroep, iteratie 5 (26-11-2026) | Tests R7, TC-13 |
+| R7 | Per voorstel is er een **gesprek** tussen de indiener en de stuurgroep, zodat de stuurgroep vragen kan stellen. Het gesprek is privé (management en andere medewerkers zien het niet), werkt live, geeft de andere partij een melding met een ongelezen-indicator in de lijsten, en een eigen bericht is tot **15 minuten** na verzenden te bewerken (niet te verwijderen). Een aparte tab **Gesprekken** toont al je gesprekken; bij een statuswijziging of nieuw bericht verschijnt een **pop-up** (iteratie 5b). | Should | Wens Theo/stuurgroep, iteratie 5a/5b (26-11-2026) | Tests R7, TC-13, TC-14 |
 | – | Koppeling met Freshservice, voorstellen van externen, overzetten van oude ideeën | Won't (nu) | Projectplan §5 | – |
 
 ### Niet-functioneel
@@ -29,7 +29,7 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | NF1 | Bruikbaarheid: een voorstel indienen kost minder dan 5 minuten. | Acceptatietest met testers (TC-07), tijd meten |
 | NF2 | Veiligheid: ingevoerde tekst wordt nooit als code uitgevoerd (XSS), ook niet in e-mails. Alleen de stuurgroep kan beoordelen en status wijzigen (gecontroleerd op de server). Geen wachtwoorden in de code. | TC-08, tests NF2, `.env` buiten Git |
 | NF3 | Toegankelijkheid en apparaten: werkt op laptop en telefoon, bruikbaar met toetsenbord, labels bij alle velden. | TC-09 |
-| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (35 tests) |
+| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (36 tests) |
 | NF5 | Kosten en capaciteit: realiseerbaar binnen €2.500 en max. 2 uur per dag. | Projectplan, urenregistratie |
 
 ## 3. Datamodel (7 entiteiten)

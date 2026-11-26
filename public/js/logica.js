@@ -269,6 +269,25 @@
     return { reactie, notificaties };
   }
 
+  /**
+   * Alle gesprekken waar deze medewerker deelnemer van is (voor de tab Gesprekken):
+   * voorstellen met minstens één reactie die hij mag zien, het meest recente gesprek bovenaan.
+   * @returns {{voorstel:object, laatste:object, aantal:number}[]}
+   */
+  function gesprekkenVoor(data, medewerkerId) {
+    const perVoorstel = new Map();
+    (data.reacties || []).forEach(r => {
+      const g = perVoorstel.get(r.voorstelId) || { laatste: r, aantal: 0 };
+      g.aantal++;
+      if (r.verzondenOp > g.laatste.verzondenOp) g.laatste = r;
+      perVoorstel.set(r.voorstelId, g);
+    });
+    return [...perVoorstel.entries()]
+      .filter(([voorstelId]) => magGesprekZien(data, voorstelId, medewerkerId))
+      .map(([voorstelId, g]) => ({ voorstel: data.voorstellen.find(v => v.id === voorstelId), laatste: g.laatste, aantal: g.aantal }))
+      .sort((a, b) => b.laatste.verzondenOp.localeCompare(a.laatste.verzondenOp));
+  }
+
   /** Mag deze medewerker deze reactie nu nog bewerken? Alleen je eigen reactie, tot 15 minuten na verzenden. */
   function magReactieBewerken(reactie, medewerkerId, nu) {
     const verstreken = (nu || new Date()).getTime() - new Date(reactie.verzondenOp).getTime();
@@ -349,7 +368,7 @@
     NIVEAUS, STATUSSEN, OVERGANGEN, OPEN_STATUSSEN, MAX_DAGEN_ZONDER_REACTIE,
     berekenPrioriteit, valideerVoorstel, magOvergaan, controleerStuurgroep, wijzigStatus, dienVoorstelIn,
     slaBeoordelingOp, dashboardCijfers, nieuwId, isoWeek,
-    MAX_REACTIE_TEKENS, BEWERK_MINUTEN, magGesprekZien, plaatsReactie, magReactieBewerken, bewerkReactie,
+    MAX_REACTIE_TEKENS, BEWERK_MINUTEN, magGesprekZien, plaatsReactie, magReactieBewerken, bewerkReactie, gesprekkenVoor,
   };
 
   // Werkt zowel in de browser (window.VBR) als in Node (voor de tests).
