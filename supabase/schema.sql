@@ -343,3 +343,7 @@ end $$;
 -- =============================================================================
 select reset_demo_intern();
 update medewerker m set auth_user_id = u.id from auth.users u where lower(u.email) = lower(m.email);
+
+-- Supabase (PostgREST) direct laten weten dat er nieuwe tabellen en functies zijn,
+-- anders volgt bij inloggen "Could not find the table ... in the schema cache".
+notify pgrst, 'reload schema';
