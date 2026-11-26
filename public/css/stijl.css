@@ -23,6 +23,10 @@
   --radius: 14px;
   --radius-klein: 10px;
   --schaduw: 0 1px 2px rgba(10, 20, 64, .04), 0 8px 24px rgba(10, 20, 64, .06);
+  /* Paginabreedte: vloeiend tot een ruime bovengrens, zodat brede schermen benut worden
+     zonder dat regels op een ultrawide scherm onleesbaar lang worden. */
+  --pagina-max: 1680px;
+  --rand: clamp(16px, 3vw, 48px);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
@@ -63,8 +67,8 @@ a { color: var(--tint); }
   border-bottom: 1px solid var(--lijn);
 }
 .kop-binnen, .tabs, .inhoud, .voet {
-  width: 100%; max-width: 880px; margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  width: 100%; max-width: calc(var(--pagina-max) + 2 * var(--rand)); margin: 0 auto;
+  padding-left: max(var(--rand), env(safe-area-inset-left, 0px)); padding-right: max(var(--rand), env(safe-area-inset-right, 0px));
 }
 .kop-binnen { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px 6px; }
 .merk { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -99,7 +103,7 @@ a { color: var(--tint); }
 .laden { color: var(--tekst-3); }
 .paginakop { display: grid; gap: 4px; }
 .paginakop h1 { font-size: clamp(26px, 5vw, 32px); font-weight: 700; }
-.paginakop p { margin: 0; color: var(--tekst-2); }
+.paginakop p { margin: 0; color: var(--tekst-2); max-width: 70ch; }
 
 .groep { display: grid; gap: 8px; align-content: start; }
 .groep-titel { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tekst-3); padding: 0 16px; margin: 0; }
@@ -197,7 +201,7 @@ a { color: var(--tint); }
 
 /* ---------- Venster (sheet) ---------- */
 .venster {
-  border: 0; padding: 0; border-radius: 18px; width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 40px);
+  border: 0; padding: 0; border-radius: 18px; width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 40px);
   background: var(--bg); color: var(--tekst); box-shadow: 0 30px 80px rgba(0, 0, 0, .35);
 }
 .venster::backdrop { background: rgba(0, 0, 0, .35); }
@@ -282,7 +286,7 @@ a { color: var(--tint); }
 /* ---------- Gesprek per voorstel (iteratie 5) ---------- */
 .gesprek-lijst { list-style: none; margin: 0; padding: 14px 16px 6px; display: grid; gap: 12px; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; }
 .gesprek-leeg { color: var(--tekst-3); font-size: 14px; text-align: center; padding: 10px 0 14px; }
-.reactie { display: grid; gap: 3px; justify-items: start; max-width: 85%; }
+.reactie { display: grid; gap: 3px; justify-items: start; max-width: min(85%, 680px); }
 .reactie.eigen { justify-self: end; justify-items: end; }
 .reactie .ballon {
   background: var(--vlak-2); border-radius: 16px 16px 16px 6px; padding: 9px 13px; font-size: 15px; line-height: 1.4;
@@ -314,14 +318,14 @@ a { color: var(--tint); }
 }
 .paginakop.met-knop { grid-template-columns: 1fr auto; align-items: end; gap: 12px; }
 .paginakop.met-knop > div { display: grid; gap: 4px; }
-.gesprekken { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; }
+.gesprekken { display: grid; grid-template-columns: clamp(260px, 30%, 420px) minmax(0, 1fr); gap: 16px; align-items: start; }
 .gesprekken-lijst { position: sticky; top: 120px; max-height: calc(100dvh - 160px); overflow-y: auto; }
 .gesprek-rij[aria-current="true"] { background: color-mix(in srgb, var(--tint) 7%, transparent); }
 .gesprek-rij.ongelezen .rij-titel { font-weight: 700; }
 .gesprek-rij-rechts { flex-direction: column; align-items: flex-end; gap: 4px; }
 .gesprek-rij-rechts .wanneer { font-size: 12px; color: var(--tekst-3); }
 .gesprekken-paneel { display: grid; }
-.gesprekken-paneel .gesprek-lijst { max-height: min(58dvh, 560px); min-height: 280px; }
+.gesprekken-paneel .gesprek-lijst { max-height: max(280px, calc(100dvh - 400px)); min-height: 280px; }
 .leeg-paneel { min-height: 320px; display: grid; place-items: center; }
 .paneel-kop { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--lijn); }
 .paneel-kop .terug { display: none; }
@@ -364,3 +368,23 @@ a { color: var(--tint); }
 .gesprekken-lijst .lijst > li + li { margin-left: 0; }
 .gesprekken-lijst .lijst > li + li .rij { padding-left: 16px; }
 .venster .veld input[type="search"] { width: 100%; border: 0; background: var(--vlak); border-radius: var(--radius-klein); padding: 11px 12px; font-size: 16px; box-shadow: var(--schaduw); }
+
+/* ---------- Schermvullende layout (brede schermen) ---------- */
+/* Nieuw voorstel: verplichte velden links, optionele velden en de knop rechts. */
+.indien-raster { align-items: start; }
+.indien-zijkant { display: grid; gap: 20px; align-content: start; }
+/* Dashboard: "Aandacht nodig" naast de grafieken. */
+.dashboard-raster { display: grid; gap: 24px; align-items: start; }
+@media (min-width: 1100px) {
+  .indien-raster { grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); }
+  .indien-zijkant { position: sticky; top: 120px; }
+  .indien-raster .veld textarea { min-height: 200px; }
+}
+@media (min-width: 1200px) {
+  .dashboard-raster { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  .dashboard-raster .twee { grid-template-columns: 1fr; }
+}
+@media (min-width: 1500px) {
+  .dashboard-raster { grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); }
+  .dashboard-raster .twee { grid-template-columns: 1fr 1fr; }
+}
