@@ -77,7 +77,7 @@ De e-mailadressen van de medewerkers staan in `data/vbr.json` (bij de demodata z
 npm test
 ```
 
-35 tests: bedrijfsregels (`tests/logica.test.js`), server, opslag en e-mail (`tests/server.test.js`) en de database met rechten (`tests/supabase.test.js`, draait als `VBR_PG_URL` is gezet). Bij elke push draaien ze ook automatisch via GitHub Actions.
+36 tests: bedrijfsregels (`tests/logica.test.js`), server, opslag en e-mail (`tests/server.test.js`) en de database met rechten (`tests/supabase.test.js`, draait als `VBR_PG_URL` is gezet). Bij elke push draaien ze ook automatisch via GitHub Actions.
 
 ## Drie kernfunctionaliteiten
 

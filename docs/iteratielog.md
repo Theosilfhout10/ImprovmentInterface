@@ -130,7 +130,31 @@ Platformkeuze voor gedeelde opslag, login via Microsoft 365 en echte meldingen (
 **Betekenis voor MVP**
 - Meldingen via Teams of e-mail bij een nieuwe reactie is een logische vervolgstap zodra de Microsoft 365-koppeling er is.
 
-## Iteratie 5b – na feedback stuurgroep en testers (in te vullen)
+## Iteratie 5b – tab Gesprekken en pop-ups bij updates (26-11-2026)
+
+**Aanleiding (Theo):** "Is het een optie om een chat tab toe te voegen zodat je makkelijk vragen kan stellen en een soort popup maken als er bij een voorstel een update is?"
+
+**Afspraken vooraf (vragen gesteld, Theo akkoord met alle voorkeuren, 26-11-2026)**
+- Tab **Gesprekken** voor alle rollen: links de lijst met je gesprekken (nieuwste boven, rood bolletje bij ongelezen), rechts het open gesprek. Op een telefoon eerst de lijst, dan het gesprek.
+- Iedereen ziet alleen gesprekken waar hij deelnemer van is: de indiener bij eigen voorstellen, de stuurgroep bij alle voorstellen (de privacyregel van 5a blijft gelijk).
+- **Nieuw gesprek** starten vanuit de tab: de stuurgroep bij elk voorstel, een medewerker bij eigen voorstellen.
+- **Pop-up** bij een statuswijziging en bij een nieuw chatbericht: rustige kaart rechtsboven met knop Bekijken, verdwijnt na 8 seconden, maximaal 3 tegelijk, niet voor het voorstel of gesprek dat je al open hebt.
+- Meldingen buiten de app (browser/telefoon) en geluid: bewust nog niet.
+
+**Afwegingen**
+- *Nieuwe gegevens nodig?* Nee. De tab en de pop-ups gebruiken REACTIE en NOTIFICATIE uit 5a; het datamodel en de database blijven gelijk (geen nieuw SQL-script nodig).
+- *Eén gesprek op twee plekken:* in het voorstelvenster en in de tab. Beide blokken worden bij een live update samen bijgewerkt, zonder een half getypt bericht te wissen.
+- *Pop-up boven een open venster:* de pop-ups staan in de bovenste laag van de browser (popover), zodat je ze ook ziet als er een voorstel open staat.
+
+**Wat is aangepast**
+- `public/js/logica.js`: `gesprekkenVoor()` (welke gesprekken zie ik, nieuwste eerst), met unittest.
+- `public/js/app.js`: scherm Gesprekken, venster Nieuw gesprek, tellertje op de tab, pop-ups (`toonPopup`). Gesprekscode herbruikbaar gemaakt voor venster en tab.
+- `public/css/stijl.css`, `public/index.html`: opmaak tab en pop-ups.
+
+**Nieuwe risico's**
+- In de Node-versie zonder Realtime verschijnen pop-ups pas bij de verversing (elke 30 seconden of bij terugkeer naar het tabblad); online (Supabase) direct.
+
+## Iteratie 5c – na feedback stuurgroep en testers (in te vullen)
 
 **Doel:**
 **Feedback ontvangen van (wie, wanneer):**

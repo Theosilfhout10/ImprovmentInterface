@@ -194,3 +194,17 @@ test('R7 gesprek: werkt ook met oude data zonder reacties (bestaand databestand)
   const { reactie } = VBR.plaatsReactie(d, 'v3', 'Eerste reactie', 'm3', NU);
   assert.equal(reactie.id, 'r1');
 });
+
+// ---- Iteratie 5b: tab Gesprekken ----------------------------------------------
+test('R7 tab Gesprekken: alleen gesprekken waar je deelnemer van bent, nieuwste bovenaan', () => {
+  const d = maakDemodata(NU);                  // demo: gesprekken bij v3 (indiener m3) en v6 (indiener m1)
+  assert.deepEqual(VBR.gesprekkenVoor(d, 'm1').map(g => g.voorstel.id), ['v6']);       // alleen eigen voorstel
+  assert.deepEqual(VBR.gesprekkenVoor(d, 'm3').map(g => g.voorstel.id), ['v3']);
+  assert.deepEqual(VBR.gesprekkenVoor(d, 'm4').map(g => g.voorstel.id), ['v6', 'v3']); // stuurgroep: alle, nieuwste eerst
+  assert.deepEqual(VBR.gesprekkenVoor(d, 'm6'), []);                                   // management: geen eigen gesprekken
+  const v3 = VBR.gesprekkenVoor(d, 'm4').find(g => g.voorstel.id === 'v3');
+  assert.equal(v3.aantal, 2);
+  assert.equal(v3.laatste.afzenderId, 'm3');
+  VBR.plaatsReactie(d, 'v3', 'Nog een vraag', 'm5', new Date(NU.getTime() + 60000));
+  assert.equal(VBR.gesprekkenVoor(d, 'm4')[0].voorstel.id, 'v3');                       // nieuw bericht schuift naar boven
+});

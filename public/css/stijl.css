@@ -305,3 +305,62 @@ a { color: var(--tint); }
   display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 7px; border-radius: 999px;
   background: var(--merk); color: #fff; font-size: 12px; font-weight: 700; line-height: 18px;
 }
+
+/* ---------- Tab Gesprekken (iteratie 5b) ---------- */
+.tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.tab-teller {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--merk); color: #fff;
+  font-size: 11px; font-weight: 700; display: inline-grid; place-items: center;
+}
+.paginakop.met-knop { grid-template-columns: 1fr auto; align-items: end; gap: 12px; }
+.paginakop.met-knop > div { display: grid; gap: 4px; }
+.gesprekken { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; }
+.gesprekken-lijst { position: sticky; top: 120px; max-height: calc(100dvh - 160px); overflow-y: auto; }
+.gesprek-rij[aria-current="true"] { background: color-mix(in srgb, var(--tint) 7%, transparent); }
+.gesprek-rij.ongelezen .rij-titel { font-weight: 700; }
+.gesprek-rij-rechts { flex-direction: column; align-items: flex-end; gap: 4px; }
+.gesprek-rij-rechts .wanneer { font-size: 12px; color: var(--tekst-3); }
+.gesprekken-paneel { display: grid; }
+.gesprekken-paneel .gesprek-lijst { max-height: min(58dvh, 560px); min-height: 280px; }
+.leeg-paneel { min-height: 320px; display: grid; place-items: center; }
+.paneel-kop { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--lijn); }
+.paneel-kop .terug { display: none; }
+.paneel-titel { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.paneel-titel strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paneel-titel span { font-size: 13px; color: var(--tekst-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.paneel-kop > .tekstknop:last-child { font-size: 14px; white-space: nowrap; }
+.paneel-voet { margin: 0; padding: 0 16px 12px; font-size: 12px; color: var(--tekst-3); }
+@media (max-width: 760px) {
+  .gesprekken { grid-template-columns: 1fr; }
+  .gesprekken-lijst { position: static; max-height: none; }
+  .gesprekken.met-keuze .gesprekken-lijst, .gesprekken:not(.met-keuze) .gesprekken-paneel { display: none; }
+  .paneel-kop .terug { display: inline; }
+  .paneel-kop { flex-wrap: wrap; }
+  .paneel-titel { order: 3; flex-basis: 100%; }
+  .paneel-kop > .tekstknop:last-child { margin-left: auto; }
+}
+
+/* ---------- Pop-ups bij een update (iteratie 5b) ---------- */
+.popups {
+  position: fixed; inset: auto; top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; margin: 0; padding: 0; border: 0;
+  background: transparent; overflow: visible; display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); z-index: 30;
+}
+.popups:empty { display: none; }
+.popup {
+  display: grid; gap: 10px; padding: 14px 14px 12px 16px; border-radius: var(--radius); background: var(--vlak); color: var(--tekst);
+  box-shadow: 0 1px 2px rgba(10, 20, 64, .06), 0 16px 40px rgba(10, 20, 64, .18); border-left: 4px solid var(--merk);
+  animation: popupIn .22s ease-out;
+}
+.popup.weg { opacity: 0; transform: translateX(12px); transition: opacity .2s, transform .2s; }
+@keyframes popupIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.popup-tekst { display: grid; gap: 2px; min-width: 0; }
+.popup-voorstel { font-size: 12px; color: var(--tekst-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popup-tekst strong { font-size: 15px; }
+.popup-bericht { font-size: 14px; color: var(--tekst-2); overflow-wrap: anywhere; }
+.popup-knoppen { display: flex; align-items: center; justify-content: space-between; }
+.popup-knoppen .knop { padding: 7px 14px; font-size: 14px; border-radius: 10px; }
+.popup-sluit { border: 0; background: none; color: var(--tekst-3); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px; }
+@media (max-width: 640px) { .popups { right: 12px; left: 12px; width: auto; } }
+.gesprekken-lijst .lijst > li + li { margin-left: 0; }
+.gesprekken-lijst .lijst > li + li .rij { padding-left: 16px; }
+.venster .veld input[type="search"] { width: 100%; border: 0; background: var(--vlak); border-radius: var(--radius-klein); padding: 11px 12px; font-size: 16px; box-shadow: var(--schaduw); }
