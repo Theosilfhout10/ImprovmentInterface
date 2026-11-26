@@ -5,9 +5,10 @@
 -- Het script is opnieuw uit te voeren: het ruimt eerst de oude objecten op.
 --
 -- Opbouw:
---   1. Tabellen volgens het ERD (6 entiteiten)
+--   1. Tabellen volgens het ERD (7 entiteiten; REACTIE is erbij gekomen in iteratie 5)
 --   2. Hulpfuncties: wie is ingelogd en welke rol heeft die
---   3. Beveiliging (Row Level Security): iedereen mag lezen, NIEMAND mag direct schrijven
+--   3. Beveiliging (Row Level Security): iedereen mag lezen, NIEMAND mag direct schrijven;
+--      het gesprek (reactie) is alleen zichtbaar voor de indiener en de stuurgroep
 --   4. Functies voor alle wijzigingen, met de bedrijfsregels (zelfde regels als logica.js)
 --   5. Koppeling inlogaccount → medewerker
 --   6. Live updates (Realtime)
@@ -16,8 +17,8 @@
 
 -- ---------- Opruimen (zodat het script opnieuw kan draaien) ----------
 drop trigger if exists vbr_koppel_nieuw_account on auth.users;
-drop table if exists notificatie, statuswijziging, beoordeling, voorstel, categorie, medewerker cascade;
-drop sequence if exists voorstel_nr, beoordeling_nr, statuswijziging_nr, notificatie_nr;
+drop table if exists notificatie, reactie, statuswijziging, beoordeling, voorstel, categorie, medewerker cascade;
+drop sequence if exists voorstel_nr, beoordeling_nr, statuswijziging_nr, notificatie_nr, reactie_nr;
 
 -- =============================================================================
 -- 1. Tabellen (ERD: docs/ontwerp.md)
@@ -76,16 +77,32 @@ create table statuswijziging (
   datum        timestamptz not null default now()
 );
 
+-- Iteratie 5: gesprek per voorstel, privé tussen de indiener en de stuurgroep.
+create sequence reactie_nr;
+create table reactie (
+  id            text primary key default 'r' || nextval('reactie_nr'),
+  voorstel_id   text not null references voorstel(id) on delete cascade,
+  afzender_id   text not null references medewerker(id),
+  tekst         text not null check (char_length(tekst) between 1 and 1000),
+  verzonden_op  timestamptz not null default now(),
+  bewerkt_op    timestamptz                                -- leeg = nooit bewerkt
+);
+create index reactie_voorstel on reactie (voorstel_id, verzonden_op);
+
+-- Een notificatie hoort bij precies één aanleiding: een statuswijziging óf een reactie.
 create sequence notificatie_nr;
 create table notificatie (
   id                  text primary key default 'n' || nextval('notificatie_nr'),
   ontvanger_id        text not null references medewerker(id),
   voorstel_id         text not null references voorstel(id) on delete cascade,
-  statuswijziging_id  text not null unique references statuswijziging(id) on delete cascade,  -- 1 bericht per wijziging
+  statuswijziging_id  text unique references statuswijziging(id) on delete cascade,  -- 1 bericht per wijziging
+  reactie_id          text references reactie(id) on delete cascade,
   bericht             text not null,
   gelezen             boolean not null default false,
   mail                text,
-  datum               timestamptz not null default now()
+  datum               timestamptz not null default now(),
+  check (num_nonnulls(statuswijziging_id, reactie_id) = 1),
+  unique (reactie_id, ontvanger_id)                                                 -- 1 melding per ontvanger per reactie
 );
 
 -- =============================================================================
@@ -115,6 +132,16 @@ begin
   return m;
 end $$;
 
+-- Mag de ingelogde medewerker het gesprek bij dit voorstel zien en erin schrijven?
+-- Alleen de indiener en de stuurgroep (zelfde regel als magGesprekZien in logica.js).
+create or replace function mag_gesprek_zien(p_voorstel_id text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from voorstel v, medewerker m
+     where v.id = p_voorstel_id and m.auth_user_id = auth.uid()
+       and (v.indiener_id = m.id or m.rol = 'stuurgroep'))
+$$;
+
 -- =============================================================================
 -- 3. Beveiliging: Row Level Security
 -- =============================================================================
@@ -127,6 +154,7 @@ alter table voorstel        enable row level security;
 alter table beoordeling     enable row level security;
 alter table statuswijziging enable row level security;
 alter table notificatie     enable row level security;
+alter table reactie         enable row level security;
 
 create policy lezen on medewerker      for select to authenticated using (true);
 create policy lezen on categorie       for select to authenticated using (true);
@@ -135,6 +163,8 @@ create policy lezen on beoordeling     for select to authenticated using (true);
 create policy lezen on statuswijziging for select to authenticated using (true);
 create policy eigen_berichten on notificatie for select to authenticated
   using (ontvanger_id = (select id from huidige_medewerker()));
+create policy gesprek_deelnemers on reactie for select to authenticated
+  using (mag_gesprek_zien(voorstel_id));
 
 -- =============================================================================
 -- 4. Functies voor wijzigingen (bedrijfsregels, gelijk aan public/js/logica.js)
@@ -219,6 +249,45 @@ begin
   return sw;
 end $$;
 
+-- Iteratie 5: reactie plaatsen in het gesprek + automatisch een melding voor de andere partij.
+-- Schrijft de indiener, dan krijgt de stuurgroep een melding; schrijft de stuurgroep, dan de indiener.
+create or replace function plaats_reactie(p_voorstel_id text, p_tekst text)
+returns reactie language plpgsql security definer set search_path = public as $$
+declare m medewerker; v voorstel; r reactie;
+begin
+  m := vereis_medewerker();
+  select * into v from voorstel where id = p_voorstel_id;
+  if v.id is null then raise exception 'Voorstel niet gevonden.'; end if;
+  if not mag_gesprek_zien(p_voorstel_id) then raise exception 'Alleen de indiener en de stuurgroep kunnen in dit gesprek reageren.'; end if;
+  p_tekst := btrim(coalesce(p_tekst, ''));
+  if p_tekst = '' then raise exception 'Typ eerst een bericht.'; end if;
+  if char_length(p_tekst) > 1000 then raise exception 'Een bericht mag maximaal 1000 tekens zijn.'; end if;
+  insert into reactie (voorstel_id, afzender_id, tekst) values (p_voorstel_id, m.id, p_tekst) returning * into r;
+  insert into notificatie (ontvanger_id, voorstel_id, reactie_id, bericht)
+    select o.id, v.id, r.id, format('%s reageerde bij "%s".', m.naam, v.titel)
+      from medewerker o
+     where o.id <> m.id
+       and (case when m.id = v.indiener_id then o.rol = 'stuurgroep' else o.id = v.indiener_id end);
+  return r;
+end $$;
+
+-- Eigen reactie bewerken, tot 15 minuten na verzenden. Verwijderen kan bewust niet.
+create or replace function bewerk_reactie(p_reactie_id text, p_tekst text)
+returns reactie language plpgsql security definer set search_path = public as $$
+declare m medewerker; r reactie;
+begin
+  m := vereis_medewerker();
+  select * into r from reactie where id = p_reactie_id for update;
+  if r.id is null then raise exception 'Bericht niet gevonden.'; end if;
+  if r.afzender_id <> m.id then raise exception 'Je kunt alleen je eigen berichten bewerken.'; end if;
+  if now() - r.verzonden_op > interval '15 minutes' then raise exception 'Bewerken kan tot 15 minuten na verzenden.'; end if;
+  p_tekst := btrim(coalesce(p_tekst, ''));
+  if p_tekst = '' then raise exception 'Typ eerst een bericht.'; end if;
+  if char_length(p_tekst) > 1000 then raise exception 'Een bericht mag maximaal 1000 tekens zijn.'; end if;
+  update reactie set tekst = p_tekst, bewerkt_op = now() where id = r.id returning * into r;
+  return r;
+end $$;
+
 -- Eigen berichten als gelezen markeren (lege lijst = alles).
 create or replace function markeer_gelezen(p_ids text[] default '{}')
 returns void language plpgsql security definer set search_path = public as $$
@@ -249,11 +318,12 @@ create trigger vbr_koppel_nieuw_account after insert on auth.users for each row 
 -- =============================================================================
 -- (Supabase geeft standaard rechten aan anon en authenticated; die halen we eerst weg.)
 revoke all on all functions in schema public from public, anon, authenticated;
-revoke all on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie from anon, authenticated;
+revoke all on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie, reactie from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
-grant select on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie to authenticated;
+grant select on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie, reactie to authenticated;
 grant execute on function huidige_medewerker(), dien_voorstel_in(text, text, text, text, text), sla_beoordeling_op(text, text, text, text, text, text),
-  wijzig_status(text, text, text), markeer_gelezen(text[]), reset_demo() to authenticated;
+  wijzig_status(text, text, text), markeer_gelezen(text[]), reset_demo(),
+  mag_gesprek_zien(text), plaats_reactie(text, text), bewerk_reactie(text, text) to authenticated;
 
 -- =============================================================================
 -- 6. Live updates: wijzigingen direct naar alle open schermen sturen
@@ -261,7 +331,7 @@ grant execute on function huidige_medewerker(), dien_voorstel_in(text, text, tex
 do $$
 declare t text;
 begin
-  foreach t in array array['voorstel','beoordeling','statuswijziging','notificatie'] loop
+  foreach t in array array['voorstel','beoordeling','statuswijziging','notificatie','reactie'] loop
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
       execute format('alter publication supabase_realtime add table %I', t);
     end if;

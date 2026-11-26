@@ -74,6 +74,61 @@ do $$ declare vid text := current_setting('vbr.test_voorstel'); begin
   raise notice 'OK R2 elke statuswijziging geeft een bericht met toelichting';
 end $$;
 
+-- Iteratie 5: gesprek per voorstel (privé tussen indiener en stuurgroep)
+select pg_temp.als('00000000-0000-0000-0000-000000000001');
+do $$ declare vid text := current_setting('vbr.test_voorstel'); r reactie; begin
+  r := plaats_reactie(vid, '  Is er al iets bekend over de planning?  ');
+  if r.tekst <> 'Is er al iets bekend over de planning?' or r.afzender_id <> 'm1' or r.bewerkt_op is not null then raise exception 'Reactie fout opgeslagen'; end if;
+  perform set_config('vbr.test_reactie', r.id, false);
+  -- De indiener ziet het gesprek bij een voorstel van iemand anders niet
+  if exists (select 1 from reactie where voorstel_id = 'v3') then raise exception 'Gesprek van een ander voorstel zichtbaar'; end if;
+  r := bewerk_reactie(r.id, 'Is er al iets bekend over de planning van dit voorstel?');
+  if r.bewerkt_op is null or r.tekst not like '%van dit voorstel%' then raise exception 'Bewerken fout'; end if;
+  raise notice 'OK R7 indiener reageert en bewerkt binnen 15 minuten; ziet geen gesprekken van anderen';
+end $$;
+select pg_temp.verwacht_fout($$select plaats_reactie('v3', 'Mag ik meepraten?')$$, 'Alleen de indiener en de stuurgroep');
+select pg_temp.verwacht_fout(format($$select plaats_reactie(%L, '   ')$$, current_setting('vbr.test_voorstel')), 'Typ eerst een bericht');
+select pg_temp.verwacht_fout(format($$select plaats_reactie(%L, repeat('x', 1001))$$, current_setting('vbr.test_voorstel')), 'maximaal 1000 tekens');
+select pg_temp.verwacht_fout($$insert into reactie (voorstel_id, afzender_id, tekst) values ('v3', 'm1', 'x')$$, 'permission denied');
+select pg_temp.verwacht_fout(format($$update reactie set tekst = 'x' where id = %L$$, current_setting('vbr.test_reactie')), 'permission denied');
+reset role;
+do $$ declare vid text := current_setting('vbr.test_voorstel'); begin
+  if (select array_agg(ontvanger_id order by ontvanger_id) from notificatie where reactie_id = current_setting('vbr.test_reactie')) <> array['m4','m5'] then
+    raise exception 'Reactie van indiener moet naar de hele stuurgroep'; end if;
+end $$;
+
+select pg_temp.als('00000000-0000-0000-0000-000000000004');
+do $$ declare vid text := current_setting('vbr.test_voorstel'); r reactie; begin
+  if (select count(*) from reactie where voorstel_id = 'v3') <> 2 then raise exception 'Stuurgroep ziet niet alle gesprekken'; end if;
+  r := plaats_reactie(vid, 'Ja, hij staat gepland voor week 50.');
+  perform set_config('vbr.test_reactie2', r.id, false);
+  begin perform bewerk_reactie(current_setting('vbr.test_reactie'), 'Gekaapt'); raise exception 'Bericht van een ander bewerken mocht';
+  exception when others then if sqlerrm not like '%eigen berichten%' then raise; end if; end;
+  raise notice 'OK R7 stuurgroep ziet alle gesprekken, reageert, kan andermans bericht niet bewerken';
+end $$;
+reset role;
+do $$ begin
+  if (select array_agg(ontvanger_id) from notificatie where reactie_id = current_setting('vbr.test_reactie2')) <> array['m1'] then
+    raise exception 'Reactie van stuurgroep moet alleen naar de indiener'; end if;
+  update reactie set verzonden_op = now() - interval '16 minutes' where id = current_setting('vbr.test_reactie');
+end $$;
+select pg_temp.als('00000000-0000-0000-0000-000000000001');
+select pg_temp.verwacht_fout(format($$select bewerk_reactie(%L, 'Te laat')$$, current_setting('vbr.test_reactie')), 'tot 15 minuten');
+do $$ begin
+  if exists (select 1 from notificatie where ontvanger_id <> 'm1') then raise exception 'Indiener ziet meldingen van anderen'; end if;
+  if not exists (select 1 from notificatie where reactie_id = current_setting('vbr.test_reactie2')) then raise exception 'Indiener ziet melding van antwoord niet'; end if;
+  raise notice 'OK R7 meldingen naar de juiste partij; bewerken na 15 minuten geweigerd';
+end $$;
+reset role;
+-- Management ziet het gesprek niet en kan niet reageren
+select pg_temp.als('00000000-0000-0000-0000-000000000006');
+select pg_temp.verwacht_fout(format($$select plaats_reactie(%L, 'Even meelezen')$$, current_setting('vbr.test_voorstel')), 'Alleen de indiener en de stuurgroep');
+do $$ begin
+  if exists (select 1 from reactie) then raise exception 'Management ziet gesprekken'; end if;
+  raise notice 'OK R7 management ziet geen gesprekken';
+end $$;
+reset role;
+
 -- Management mag niet beoordelen; onbekend account mag niets
 select pg_temp.als('00000000-0000-0000-0000-000000000006');
 select pg_temp.verwacht_fout($$select wijzig_status('v6', 'In beoordeling')$$, 'Alleen de stuurgroep');

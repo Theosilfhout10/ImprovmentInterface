@@ -33,6 +33,7 @@
       beoordelingen: [],
       statuswijzigingen: [],
       notificaties: [],
+      reacties: [],   // gesprek per voorstel (iteratie 5)
     };
 
     // Hulpje om een voorstel met historie op te bouwen.
@@ -106,6 +107,24 @@
     voorstel('v7', 'Kennisbankartikel voor veelvoorkomende printerstoring',
       'Dezelfde printerstoring komt wekelijks binnen. Een kennisbankartikel scheelt de servicedesk tijd.',
       'c2', '', 'Ca. 1 uur per week tijdwinst op de servicedesk.', 'm2', 2, []);
+
+    // Gesprek per voorstel: vragen van de stuurgroep en antwoorden van de indiener.
+    // Meldingen volgen dezelfde regel als logica.js: indiener schrijft → stuurgroep, stuurgroep schrijft → indiener.
+    function reactie(voorstelId, afzenderId, dagen, uur, tekst) {
+      const v = data.voorstellen.find(x => x.id === voorstelId);
+      const datum = dagenTerug(dagen, uur);
+      const r = { id: 'r' + (data.reacties.length + 1), voorstelId, afzenderId, tekst, verzondenOp: datum, bewerktOp: null };
+      data.reacties.push(r);
+      const naam = data.medewerkers.find(m => m.id === afzenderId).naam;
+      const ontvangers = afzenderId === v.indienerId ? data.medewerkers.filter(m => m.rol === 'stuurgroep').map(m => m.id) : [v.indienerId];
+      ontvangers.filter(id => id !== afzenderId).forEach(ontvangerId => data.notificaties.push({
+        id: 'n' + (++nNr), ontvangerId, voorstelId, statuswijzigingId: null, reactieId: r.id,
+        bericht: `${naam} reageerde bij "${v.titel}".`, gelezen: dagen > 3, datum,
+      }));
+    }
+    reactie('v3', 'm5', 7, 11, 'Weet je welk firewallmodel het is en of er nog support op zit? Dan kan ik de inzet beter inschatten.');
+    reactie('v3', 'm3', 7, 13, 'Het is een FortiGate 60F, support loopt nog tot volgend jaar. De upgrade kan dus via de normale weg.');
+    reactie('v6', 'm4', 1, 10, 'Om hoeveel gedeelde accounts gaat het ongeveer? En gebruiken collega\'s nu al een wachtwoordmanager?');
 
     return data;
   }

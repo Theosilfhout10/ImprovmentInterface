@@ -1,7 +1,7 @@
 # Ontwerp – Verbeterregistratie (VBR)
 
 > Bron voor scope en eisen: *Applicatie voorstel – Egency*, *Projectplan – VBR* en *Stakeholderanalyse Verbeterregistratie v0.1 (08-10-2026)*.
-> Kaders uit de opdracht: maximaal 3 kernfunctionaliteiten en maximaal 6 entiteiten.
+> Kaders uit de opdracht: maximaal 3 kernfunctionaliteiten en maximaal 6 entiteiten. In iteratie 5 is bewust een 7e entiteit (REACTIE) toegevoegd voor het gesprek per voorstel; zie de toelichting bij het datamodel en het [iteratielog](iteratielog.md).
 
 ## 1. Probleem en doel (kort)
 
@@ -19,6 +19,7 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | R4 | Management ziet op een **dashboard** het aantal voorstellen per status, categorie en prioriteit, de reactietijd en voorstellen die te lang wachten. | Must | Projectplan §4 | Test R4, TC-06 |
 | R5 | Een indiener ziet in "Mijn voorstellen" de status en volledige historie van zijn/haar voorstellen. | Should | Voorstel: "collega's moeten zien dat er iets gebeurt" | TC-05 |
 | R6 | Een goedgekeurd en ingepland voorstel kan worden gemarkeerd als "Overgedragen aan Freshservice". | Could | Afbakening: uitvoering via Freshservice | TC-04 |
+| R7 | Per voorstel is er een **gesprek** tussen de indiener en de stuurgroep, zodat de stuurgroep vragen kan stellen. Het gesprek is privé (management en andere medewerkers zien het niet), werkt live, geeft de andere partij een melding met een ongelezen-indicator in de lijsten, en een eigen bericht is tot **15 minuten** na verzenden te bewerken (niet te verwijderen). | Should | Wens Theo/stuurgroep, iteratie 5 (26-11-2026) | Tests R7, TC-13 |
 | – | Koppeling met Freshservice, voorstellen van externen, overzetten van oude ideeën | Won't (nu) | Projectplan §5 | – |
 
 ### Niet-functioneel
@@ -28,10 +29,10 @@ Medewerkers zien dagelijks verbeterkansen (klantomgevingen, interne processen, b
 | NF1 | Bruikbaarheid: een voorstel indienen kost minder dan 5 minuten. | Acceptatietest met testers (TC-07), tijd meten |
 | NF2 | Veiligheid: ingevoerde tekst wordt nooit als code uitgevoerd (XSS), ook niet in e-mails. Alleen de stuurgroep kan beoordelen en status wijzigen (gecontroleerd op de server). Geen wachtwoorden in de code. | TC-08, tests NF2, `.env` buiten Git |
 | NF3 | Toegankelijkheid en apparaten: werkt op laptop en telefoon, bruikbaar met toetsenbord, labels bij alle velden. | TC-09 |
-| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (26 tests) |
+| NF4 | Onderhoudbaarheid: bedrijfsregels staan los van de schermen en zijn automatisch getest. | `npm test` (35 tests) |
 | NF5 | Kosten en capaciteit: realiseerbaar binnen €2.500 en max. 2 uur per dag. | Projectplan, urenregistratie |
 
-## 3. Datamodel (6 entiteiten)
+## 3. Datamodel (7 entiteiten)
 
 ```mermaid
 erDiagram
@@ -43,6 +44,9 @@ erDiagram
     MEDEWERKER ||--o{ STATUSWIJZIGING : "voert uit"
     STATUSWIJZIGING ||--|| NOTIFICATIE : "veroorzaakt"
     MEDEWERKER ||--o{ NOTIFICATIE : "ontvangt"
+    VOORSTEL ||--o{ REACTIE : "heeft gesprek"
+    MEDEWERKER ||--o{ REACTIE : "schrijft"
+    REACTIE ||--o{ NOTIFICATIE : "veroorzaakt"
 
     MEDEWERKER {
         string id PK
@@ -93,15 +97,26 @@ erDiagram
         string id PK
         string ontvangerId FK
         string voorstelId FK
-        string statuswijzigingId FK
+        string statuswijzigingId FK "óf deze..."
+        string reactieId FK "...óf deze (iteratie 5)"
         string bericht
         bool gelezen
         string mail "verzonden | voorbeeld | mislukt"
         datetime datum
     }
+    REACTIE {
+        string id PK
+        string voorstelId FK
+        string afzenderId FK
+        string tekst "1-1000 tekens"
+        datetime verzondenOp
+        datetime bewerktOp "leeg = nooit bewerkt"
+    }
 ```
 
 > **Iteratie 4:** het datamodel blijft 6 entiteiten. Het inlogaccount (e-mail + wachtwoord) staat in de ingebouwde accounttabel van Supabase (`auth.users`); dat is infrastructuur, geen entiteit van het domein. `MEDEWERKER.authUserId` legt de koppeling, op basis van het e-mailadres. Zo bepaalt de database bij elke actie wie je bent en welke rol je hebt.
+
+> **Iteratie 5:** REACTIE is de 7e entiteit (akkoord van Theo als projectleider, 26-11-2026). Een aparte entiteit is zuiverder dan reacties opslaan als "statuswijziging zonder statuswissel": een reactie heeft een andere levensloop (bewerken binnen 15 minuten), andere leesrechten (privé tussen indiener en stuurgroep) en geen statusovergang. Een NOTIFICATIE heeft nu precies één aanleiding: een statuswijziging óf een reactie (afgedwongen met een `check` in de database). Schrijft de indiener, dan krijgen alle stuurgroepleden een melding; schrijft de stuurgroep, dan krijgt de indiener er een. Het aantal kernfunctionaliteiten blijft 3: het gesprek is een uitbreiding van kernfunctionaliteit 2 (beoordelen met terugkoppeling), die daarmee tweerichtingsverkeer wordt.
 
 ### Toelichting op ontwerpkeuzes
 
@@ -170,6 +185,8 @@ Elke pijl maakt een Statuswijziging en een Notificatie voor de indiener aan.
 | Eigen voorstellen en berichten | ✓ | ✓ | ✓ |
 | Beoordelen en status wijzigen | – | ✓ | – |
 | Dashboard | – | ✓ | ✓ |
+| Gesprek per voorstel lezen en schrijven (iteratie 5) | alleen bij eigen voorstellen | ✓ alle voorstellen | alleen bij eigen voorstellen |
+| Eigen bericht bewerken (tot 15 min) | ✓ | ✓ | ✓ |
 
 ## 6. Product backlog en sprintindeling
 

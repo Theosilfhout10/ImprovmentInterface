@@ -5,9 +5,10 @@
 -- Het script is opnieuw uit te voeren: het ruimt eerst de oude objecten op.
 --
 -- Opbouw:
---   1. Tabellen volgens het ERD (6 entiteiten)
+--   1. Tabellen volgens het ERD (7 entiteiten; REACTIE is erbij gekomen in iteratie 5)
 --   2. Hulpfuncties: wie is ingelogd en welke rol heeft die
---   3. Beveiliging (Row Level Security): iedereen mag lezen, NIEMAND mag direct schrijven
+--   3. Beveiliging (Row Level Security): iedereen mag lezen, NIEMAND mag direct schrijven;
+--      het gesprek (reactie) is alleen zichtbaar voor de indiener en de stuurgroep
 --   4. Functies voor alle wijzigingen, met de bedrijfsregels (zelfde regels als logica.js)
 --   5. Koppeling inlogaccount → medewerker
 --   6. Live updates (Realtime)
@@ -16,8 +17,8 @@
 
 -- ---------- Opruimen (zodat het script opnieuw kan draaien) ----------
 drop trigger if exists vbr_koppel_nieuw_account on auth.users;
-drop table if exists notificatie, statuswijziging, beoordeling, voorstel, categorie, medewerker cascade;
-drop sequence if exists voorstel_nr, beoordeling_nr, statuswijziging_nr, notificatie_nr;
+drop table if exists notificatie, reactie, statuswijziging, beoordeling, voorstel, categorie, medewerker cascade;
+drop sequence if exists voorstel_nr, beoordeling_nr, statuswijziging_nr, notificatie_nr, reactie_nr;
 
 -- =============================================================================
 -- 1. Tabellen (ERD: docs/ontwerp.md)
@@ -76,16 +77,32 @@ create table statuswijziging (
   datum        timestamptz not null default now()
 );
 
+-- Iteratie 5: gesprek per voorstel, privé tussen de indiener en de stuurgroep.
+create sequence reactie_nr;
+create table reactie (
+  id            text primary key default 'r' || nextval('reactie_nr'),
+  voorstel_id   text not null references voorstel(id) on delete cascade,
+  afzender_id   text not null references medewerker(id),
+  tekst         text not null check (char_length(tekst) between 1 and 1000),
+  verzonden_op  timestamptz not null default now(),
+  bewerkt_op    timestamptz                                -- leeg = nooit bewerkt
+);
+create index reactie_voorstel on reactie (voorstel_id, verzonden_op);
+
+-- Een notificatie hoort bij precies één aanleiding: een statuswijziging óf een reactie.
 create sequence notificatie_nr;
 create table notificatie (
   id                  text primary key default 'n' || nextval('notificatie_nr'),
   ontvanger_id        text not null references medewerker(id),
   voorstel_id         text not null references voorstel(id) on delete cascade,
-  statuswijziging_id  text not null unique references statuswijziging(id) on delete cascade,  -- 1 bericht per wijziging
+  statuswijziging_id  text unique references statuswijziging(id) on delete cascade,  -- 1 bericht per wijziging
+  reactie_id          text references reactie(id) on delete cascade,
   bericht             text not null,
   gelezen             boolean not null default false,
   mail                text,
-  datum               timestamptz not null default now()
+  datum               timestamptz not null default now(),
+  check (num_nonnulls(statuswijziging_id, reactie_id) = 1),
+  unique (reactie_id, ontvanger_id)                                                 -- 1 melding per ontvanger per reactie
 );
 
 -- =============================================================================
@@ -115,6 +132,16 @@ begin
   return m;
 end $$;
 
+-- Mag de ingelogde medewerker het gesprek bij dit voorstel zien en erin schrijven?
+-- Alleen de indiener en de stuurgroep (zelfde regel als magGesprekZien in logica.js).
+create or replace function mag_gesprek_zien(p_voorstel_id text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from voorstel v, medewerker m
+     where v.id = p_voorstel_id and m.auth_user_id = auth.uid()
+       and (v.indiener_id = m.id or m.rol = 'stuurgroep'))
+$$;
+
 -- =============================================================================
 -- 3. Beveiliging: Row Level Security
 -- =============================================================================
@@ -127,6 +154,7 @@ alter table voorstel        enable row level security;
 alter table beoordeling     enable row level security;
 alter table statuswijziging enable row level security;
 alter table notificatie     enable row level security;
+alter table reactie         enable row level security;
 
 create policy lezen on medewerker      for select to authenticated using (true);
 create policy lezen on categorie       for select to authenticated using (true);
@@ -135,6 +163,8 @@ create policy lezen on beoordeling     for select to authenticated using (true);
 create policy lezen on statuswijziging for select to authenticated using (true);
 create policy eigen_berichten on notificatie for select to authenticated
   using (ontvanger_id = (select id from huidige_medewerker()));
+create policy gesprek_deelnemers on reactie for select to authenticated
+  using (mag_gesprek_zien(voorstel_id));
 
 -- =============================================================================
 -- 4. Functies voor wijzigingen (bedrijfsregels, gelijk aan public/js/logica.js)
@@ -219,6 +249,45 @@ begin
   return sw;
 end $$;
 
+-- Iteratie 5: reactie plaatsen in het gesprek + automatisch een melding voor de andere partij.
+-- Schrijft de indiener, dan krijgt de stuurgroep een melding; schrijft de stuurgroep, dan de indiener.
+create or replace function plaats_reactie(p_voorstel_id text, p_tekst text)
+returns reactie language plpgsql security definer set search_path = public as $$
+declare m medewerker; v voorstel; r reactie;
+begin
+  m := vereis_medewerker();
+  select * into v from voorstel where id = p_voorstel_id;
+  if v.id is null then raise exception 'Voorstel niet gevonden.'; end if;
+  if not mag_gesprek_zien(p_voorstel_id) then raise exception 'Alleen de indiener en de stuurgroep kunnen in dit gesprek reageren.'; end if;
+  p_tekst := btrim(coalesce(p_tekst, ''));
+  if p_tekst = '' then raise exception 'Typ eerst een bericht.'; end if;
+  if char_length(p_tekst) > 1000 then raise exception 'Een bericht mag maximaal 1000 tekens zijn.'; end if;
+  insert into reactie (voorstel_id, afzender_id, tekst) values (p_voorstel_id, m.id, p_tekst) returning * into r;
+  insert into notificatie (ontvanger_id, voorstel_id, reactie_id, bericht)
+    select o.id, v.id, r.id, format('%s reageerde bij "%s".', m.naam, v.titel)
+      from medewerker o
+     where o.id <> m.id
+       and (case when m.id = v.indiener_id then o.rol = 'stuurgroep' else o.id = v.indiener_id end);
+  return r;
+end $$;
+
+-- Eigen reactie bewerken, tot 15 minuten na verzenden. Verwijderen kan bewust niet.
+create or replace function bewerk_reactie(p_reactie_id text, p_tekst text)
+returns reactie language plpgsql security definer set search_path = public as $$
+declare m medewerker; r reactie;
+begin
+  m := vereis_medewerker();
+  select * into r from reactie where id = p_reactie_id for update;
+  if r.id is null then raise exception 'Bericht niet gevonden.'; end if;
+  if r.afzender_id <> m.id then raise exception 'Je kunt alleen je eigen berichten bewerken.'; end if;
+  if now() - r.verzonden_op > interval '15 minutes' then raise exception 'Bewerken kan tot 15 minuten na verzenden.'; end if;
+  p_tekst := btrim(coalesce(p_tekst, ''));
+  if p_tekst = '' then raise exception 'Typ eerst een bericht.'; end if;
+  if char_length(p_tekst) > 1000 then raise exception 'Een bericht mag maximaal 1000 tekens zijn.'; end if;
+  update reactie set tekst = p_tekst, bewerkt_op = now() where id = r.id returning * into r;
+  return r;
+end $$;
+
 -- Eigen berichten als gelezen markeren (lege lijst = alles).
 create or replace function markeer_gelezen(p_ids text[] default '{}')
 returns void language plpgsql security definer set search_path = public as $$
@@ -242,11 +311,11 @@ begin
 end $$;
 create trigger vbr_koppel_nieuw_account after insert on auth.users for each row execute function koppel_account();
 
--- Demodata (gegenereerd door scripts/maak-supabase-sql.js op 2026-11-25).
+-- Demodata (gegenereerd door scripts/maak-supabase-sql.js op 2026-11-26).
 create or replace function reset_demo_intern() returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  delete from notificatie where true; delete from statuswijziging where true; delete from beoordeling where true; delete from voorstel where true;
+  delete from notificatie where true; delete from reactie where true; delete from statuswijziging where true; delete from beoordeling where true; delete from voorstel where true;
   insert into medewerker (id, naam, email, rol) values
     ('m1', 'Theo Silfhout', 'medewerker@verbeterregistratie.test', 'medewerker'),
     ('m2', 'Matthijs van Voorthuizen', 'matthijs@egency.example', 'medewerker'),
@@ -261,60 +330,69 @@ begin
     ('c3', 'Beveiliging', 'Beveiligingsverbetering bij een klant of bij Egency')
     on conflict (id) do update set naam = excluded.naam, omschrijving = excluded.omschrijving;
   insert into voorstel (id, titel, omschrijving, categorie_id, klant, opbrengst, indiener_id, status, ingediend_op) values
-    ('v1', 'MFA afdwingen voor beheeraccounts bij klanten', 'Bij meerdere klanten hebben beheeraccounts nog geen MFA. Voorstel: via Conditional Access MFA verplichten voor alle admin-rollen.', 'c3', 'Meerdere klanten', 'Lager risico op accountovername; adviestraject bij ca. 8 klanten.', 'm2', 'Overgedragen aan Freshservice', now() - interval '2118796 seconds'),
-    ('v2', 'Standaard checklist voor onboarding nieuwe klant', 'Elke engineer doet de onboarding anders. Een vaste checklist voorkomt vergeten stappen zoals back-upcontrole en documentatie.', 'c2', '', 'Minder nazorgtickets na onboarding, snellere inwerktijd nieuwe collega''s.', 'm1', 'Ingepland', now() - interval '1513996 seconds'),
-    ('v3', 'Verouderde firewall-firmware bij klant', 'Tijdens een storing zag ik dat de firewall bij deze klant twee major versies achterloopt. Voorstel: upgrade adviseren en inplannen.', 'c3', 'Klant Bouwbedrijf', 'Advies-uren en kleiner beveiligingsrisico.', 'm3', 'In beoordeling', now() - interval '822796 seconds'),
-    ('v4', 'Automatische rapportage licentiegebruik M365', 'Klanten betalen vaak voor ongebruikte licenties. Een maandelijkse rapportage maakt dit zichtbaar en levert adviesgesprekken op.', 'c1', 'Alle M365-klanten', 'Besparing voor klant, extra adviesomzet voor Egency.', 'm2', 'On hold', now() - interval '1081996 seconds'),
-    ('v5', 'Koffieautomaat vervangen', 'De koffieautomaat op kantoor is vaak stuk.', 'c2', '', '', 'm3', 'Afgewezen', now() - interval '1341196 seconds'),
-    ('v6', 'Wachtwoordbeleid servicedesk-accounts aanscherpen', 'Gedeelde accounts op de servicedesk gebruiken een zwak wachtwoord dat lang niet gewijzigd is. Voorstel: persoonlijke accounts + wachtwoordmanager.', 'c3', '', 'Kleiner risico voor Egency, voldoet beter aan ISO 27001.', 'm1', 'Ingediend', now() - interval '909196 seconds'),
-    ('v7', 'Kennisbankartikel voor veelvoorkomende printerstoring', 'Dezelfde printerstoring komt wekelijks binnen. Een kennisbankartikel scheelt de servicedesk tijd.', 'c2', '', 'Ca. 1 uur per week tijdwinst op de servicedesk.', 'm2', 'Ingediend', now() - interval '217996 seconds');
+    ('v1', 'MFA afdwingen voor beheeraccounts bij klanten', 'Bij meerdere klanten hebben beheeraccounts nog geen MFA. Voorstel: via Conditional Access MFA verplichten voor alle admin-rollen.', 'c3', 'Meerdere klanten', 'Lager risico op accountovername; adviestraject bij ca. 8 klanten.', 'm2', 'Overgedragen aan Freshservice', now() - interval '2094521 seconds'),
+    ('v2', 'Standaard checklist voor onboarding nieuwe klant', 'Elke engineer doet de onboarding anders. Een vaste checklist voorkomt vergeten stappen zoals back-upcontrole en documentatie.', 'c2', '', 'Minder nazorgtickets na onboarding, snellere inwerktijd nieuwe collega''s.', 'm1', 'Ingepland', now() - interval '1489721 seconds'),
+    ('v3', 'Verouderde firewall-firmware bij klant', 'Tijdens een storing zag ik dat de firewall bij deze klant twee major versies achterloopt. Voorstel: upgrade adviseren en inplannen.', 'c3', 'Klant Bouwbedrijf', 'Advies-uren en kleiner beveiligingsrisico.', 'm3', 'In beoordeling', now() - interval '798521 seconds'),
+    ('v4', 'Automatische rapportage licentiegebruik M365', 'Klanten betalen vaak voor ongebruikte licenties. Een maandelijkse rapportage maakt dit zichtbaar en levert adviesgesprekken op.', 'c1', 'Alle M365-klanten', 'Besparing voor klant, extra adviesomzet voor Egency.', 'm2', 'On hold', now() - interval '1057721 seconds'),
+    ('v5', 'Koffieautomaat vervangen', 'De koffieautomaat op kantoor is vaak stuk.', 'c2', '', '', 'm3', 'Afgewezen', now() - interval '1316921 seconds'),
+    ('v6', 'Wachtwoordbeleid servicedesk-accounts aanscherpen', 'Gedeelde accounts op de servicedesk gebruiken een zwak wachtwoord dat lang niet gewijzigd is. Voorstel: persoonlijke accounts + wachtwoordmanager.', 'c3', '', 'Kleiner risico voor Egency, voldoet beter aan ISO 27001.', 'm1', 'Ingediend', now() - interval '884921 seconds'),
+    ('v7', 'Kennisbankartikel voor veelvoorkomende printerstoring', 'Dezelfde printerstoring komt wekelijks binnen. Een kennisbankartikel scheelt de servicedesk tijd.', 'c2', '', 'Ca. 1 uur per week tijdwinst op de servicedesk.', 'm2', 'Ingediend', now() - interval '193721 seconds');
   insert into beoordeling (id, voorstel_id, beoordelaar_id, impact, urgentie, inzet, score, prioriteit, gepland_week, notitie, datum) values
-    ('b1', 'v1', 'm5', 'hoog', 'hoog', 'middel', 8, 'Hoog', '', '', now() - interval '1841596 seconds'),
-    ('b2', 'v2', 'm4', 'middel', 'middel', 'laag', 7, 'Hoog', '2026-W49', '', now() - interval '1236796 seconds'),
-    ('b3', 'v3', 'm5', 'hoog', 'middel', 'laag', 8, 'Hoog', '', '', now() - interval '631996 seconds'),
-    ('b4', 'v4', 'm4', 'middel', 'laag', 'hoog', 4, 'Laag', '', '', now() - interval '631996 seconds');
+    ('b1', 'v1', 'm5', 'hoog', 'hoog', 'middel', 8, 'Hoog', '', '', now() - interval '1817321 seconds'),
+    ('b2', 'v2', 'm4', 'middel', 'middel', 'laag', 7, 'Hoog', '2026-W49', '', now() - interval '1212521 seconds'),
+    ('b3', 'v3', 'm5', 'hoog', 'middel', 'laag', 8, 'Hoog', '', '', now() - interval '607721 seconds'),
+    ('b4', 'v4', 'm4', 'middel', 'laag', 'hoog', 4, 'Laag', '', '', now() - interval '607721 seconds');
   insert into statuswijziging (id, voorstel_id, van_status, naar_status, door_id, toelichting, datum) values
-    ('sw1', 'v1', null, 'Ingediend', 'm2', '', now() - interval '2118796 seconds'),
-    ('sw2', 'v1', 'Ingediend', 'In beoordeling', 'm5', '', now() - interval '1841596 seconds'),
-    ('sw3', 'v1', 'In beoordeling', 'Goedgekeurd', 'm4', 'Hoge impact op beveiliging; Arjen pakt de inhoud op.', now() - interval '1837996 seconds'),
-    ('sw4', 'v1', 'Goedgekeurd', 'Ingepland', 'm4', '', now() - interval '1755196 seconds'),
-    ('sw5', 'v1', 'Ingepland', 'Overgedragen aan Freshservice', 'm4', 'Freshservice-change aangemaakt.', now() - interval '1150396 seconds'),
-    ('sw6', 'v2', null, 'Ingediend', 'm1', '', now() - interval '1513996 seconds'),
-    ('sw7', 'v2', 'Ingediend', 'In beoordeling', 'm4', '', now() - interval '1236796 seconds'),
-    ('sw8', 'v2', 'In beoordeling', 'Goedgekeurd', 'm4', '', now() - interval '1233196 seconds'),
-    ('sw9', 'v2', 'Goedgekeurd', 'Ingepland', 'm4', 'Ingepland op basis van beschikbare capaciteit.', now() - interval '631996 seconds'),
-    ('sw10', 'v3', null, 'Ingediend', 'm3', '', now() - interval '822796 seconds'),
-    ('sw11', 'v3', 'Ingediend', 'In beoordeling', 'm5', '', now() - interval '631996 seconds'),
-    ('sw12', 'v4', null, 'Ingediend', 'm2', '', now() - interval '1081996 seconds'),
-    ('sw13', 'v4', 'Ingediend', 'In beoordeling', 'm4', '', now() - interval '631996 seconds'),
-    ('sw14', 'v4', 'In beoordeling', 'On hold', 'm4', 'Goed idee, maar eerst capaciteit vrijmaken in Q1.', now() - interval '628396 seconds'),
-    ('sw15', 'v5', null, 'Ingediend', 'm3', '', now() - interval '1341196 seconds'),
-    ('sw16', 'v5', 'Ingediend', 'Afgewezen', 'm4', 'Hoort niet in deze registratie; graag melden bij facilitair.', now() - interval '1236796 seconds'),
-    ('sw17', 'v6', null, 'Ingediend', 'm1', '', now() - interval '909196 seconds'),
-    ('sw18', 'v7', null, 'Ingediend', 'm2', '', now() - interval '217996 seconds');
-  insert into notificatie (id, ontvanger_id, voorstel_id, statuswijziging_id, bericht, gelezen, datum) values
-    ('n1', 'm2', 'v1', 'sw1', 'Bedankt! Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '2118796 seconds'),
-    ('n2', 'm2', 'v1', 'sw2', 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "In beoordeling".', true, now() - interval '1841596 seconds'),
-    ('n3', 'm2', 'v1', 'sw3', 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "Goedgekeurd". Toelichting: Hoge impact op beveiliging; Arjen pakt de inhoud op.', true, now() - interval '1837996 seconds'),
-    ('n4', 'm2', 'v1', 'sw4', 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "Ingepland".', true, now() - interval '1755196 seconds'),
-    ('n5', 'm2', 'v1', 'sw5', 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "Overgedragen aan Freshservice". Toelichting: Freshservice-change aangemaakt.', true, now() - interval '1150396 seconds'),
-    ('n6', 'm1', 'v2', 'sw6', 'Bedankt! Je voorstel "Standaard checklist voor onboarding nieuwe klant" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '1513996 seconds'),
-    ('n7', 'm1', 'v2', 'sw7', 'Je voorstel "Standaard checklist voor onboarding nieuwe klant" heeft nu de status "In beoordeling".', true, now() - interval '1236796 seconds'),
-    ('n8', 'm1', 'v2', 'sw8', 'Je voorstel "Standaard checklist voor onboarding nieuwe klant" heeft nu de status "Goedgekeurd".', true, now() - interval '1233196 seconds'),
-    ('n9', 'm1', 'v2', 'sw9', 'Je voorstel "Standaard checklist voor onboarding nieuwe klant" heeft nu de status "Ingepland". Toelichting: Ingepland op basis van beschikbare capaciteit.', true, now() - interval '631996 seconds'),
-    ('n10', 'm3', 'v3', 'sw10', 'Bedankt! Je voorstel "Verouderde firewall-firmware bij klant" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '822796 seconds'),
-    ('n11', 'm3', 'v3', 'sw11', 'Je voorstel "Verouderde firewall-firmware bij klant" heeft nu de status "In beoordeling".', true, now() - interval '631996 seconds'),
-    ('n12', 'm2', 'v4', 'sw12', 'Bedankt! Je voorstel "Automatische rapportage licentiegebruik M365" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '1081996 seconds'),
-    ('n13', 'm2', 'v4', 'sw13', 'Je voorstel "Automatische rapportage licentiegebruik M365" heeft nu de status "In beoordeling".', true, now() - interval '631996 seconds'),
-    ('n14', 'm2', 'v4', 'sw14', 'Je voorstel "Automatische rapportage licentiegebruik M365" heeft nu de status "On hold". Toelichting: Goed idee, maar eerst capaciteit vrijmaken in Q1.', true, now() - interval '628396 seconds'),
-    ('n15', 'm3', 'v5', 'sw15', 'Bedankt! Je voorstel "Koffieautomaat vervangen" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '1341196 seconds'),
-    ('n16', 'm3', 'v5', 'sw16', 'Je voorstel "Koffieautomaat vervangen" heeft nu de status "Afgewezen". Toelichting: Hoort niet in deze registratie; graag melden bij facilitair.', true, now() - interval '1236796 seconds'),
-    ('n17', 'm1', 'v6', 'sw17', 'Bedankt! Je voorstel "Wachtwoordbeleid servicedesk-accounts aanscherpen" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '909196 seconds'),
-    ('n18', 'm2', 'v7', 'sw18', 'Bedankt! Je voorstel "Kennisbankartikel voor veelvoorkomende printerstoring" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', false, now() - interval '217996 seconds');
+    ('sw1', 'v1', null, 'Ingediend', 'm2', '', now() - interval '2094521 seconds'),
+    ('sw2', 'v1', 'Ingediend', 'In beoordeling', 'm5', '', now() - interval '1817321 seconds'),
+    ('sw3', 'v1', 'In beoordeling', 'Goedgekeurd', 'm4', 'Hoge impact op beveiliging; Arjen pakt de inhoud op.', now() - interval '1813721 seconds'),
+    ('sw4', 'v1', 'Goedgekeurd', 'Ingepland', 'm4', '', now() - interval '1730921 seconds'),
+    ('sw5', 'v1', 'Ingepland', 'Overgedragen aan Freshservice', 'm4', 'Freshservice-change aangemaakt.', now() - interval '1126121 seconds'),
+    ('sw6', 'v2', null, 'Ingediend', 'm1', '', now() - interval '1489721 seconds'),
+    ('sw7', 'v2', 'Ingediend', 'In beoordeling', 'm4', '', now() - interval '1212521 seconds'),
+    ('sw8', 'v2', 'In beoordeling', 'Goedgekeurd', 'm4', '', now() - interval '1208921 seconds'),
+    ('sw9', 'v2', 'Goedgekeurd', 'Ingepland', 'm4', 'Ingepland op basis van beschikbare capaciteit.', now() - interval '607721 seconds'),
+    ('sw10', 'v3', null, 'Ingediend', 'm3', '', now() - interval '798521 seconds'),
+    ('sw11', 'v3', 'Ingediend', 'In beoordeling', 'm5', '', now() - interval '607721 seconds'),
+    ('sw12', 'v4', null, 'Ingediend', 'm2', '', now() - interval '1057721 seconds'),
+    ('sw13', 'v4', 'Ingediend', 'In beoordeling', 'm4', '', now() - interval '607721 seconds'),
+    ('sw14', 'v4', 'In beoordeling', 'On hold', 'm4', 'Goed idee, maar eerst capaciteit vrijmaken in Q1.', now() - interval '604121 seconds'),
+    ('sw15', 'v5', null, 'Ingediend', 'm3', '', now() - interval '1316921 seconds'),
+    ('sw16', 'v5', 'Ingediend', 'Afgewezen', 'm4', 'Hoort niet in deze registratie; graag melden bij facilitair.', now() - interval '1212521 seconds'),
+    ('sw17', 'v6', null, 'Ingediend', 'm1', '', now() - interval '884921 seconds'),
+    ('sw18', 'v7', null, 'Ingediend', 'm2', '', now() - interval '193721 seconds');
+  insert into reactie (id, voorstel_id, afzender_id, tekst, verzonden_op) values
+    ('r1', 'v3', 'm5', 'Weet je welk firewallmodel het is en of er nog support op zit? Dan kan ik de inzet beter inschatten.', now() - interval '618521 seconds'),
+    ('r2', 'v3', 'm3', 'Het is een FortiGate 60F, support loopt nog tot volgend jaar. De upgrade kan dus via de normale weg.', now() - interval '611321 seconds'),
+    ('r3', 'v6', 'm4', 'Om hoeveel gedeelde accounts gaat het ongeveer? En gebruiken collega''s nu al een wachtwoordmanager?', now() - interval '103721 seconds');
+  insert into notificatie (id, ontvanger_id, voorstel_id, statuswijziging_id, reactie_id, bericht, gelezen, datum) values
+    ('n1', 'm2', 'v1', 'sw1', null, 'Bedankt! Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '2094521 seconds'),
+    ('n2', 'm2', 'v1', 'sw2', null, 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "In beoordeling".', true, now() - interval '1817321 seconds'),
+    ('n3', 'm2', 'v1', 'sw3', null, 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "Goedgekeurd". Toelichting: Hoge impact op beveiliging; Arjen pakt de inhoud op.', true, now() - interval '1813721 seconds'),
+    ('n4', 'm2', 'v1', 'sw4', null, 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "Ingepland".', true, now() - interval '1730921 seconds'),
+    ('n5', 'm2', 'v1', 'sw5', null, 'Je voorstel "MFA afdwingen voor beheeraccounts bij klanten" heeft nu de status "Overgedragen aan Freshservice". Toelichting: Freshservice-change aangemaakt.', true, now() - interval '1126121 seconds'),
+    ('n6', 'm1', 'v2', 'sw6', null, 'Bedankt! Je voorstel "Standaard checklist voor onboarding nieuwe klant" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '1489721 seconds'),
+    ('n7', 'm1', 'v2', 'sw7', null, 'Je voorstel "Standaard checklist voor onboarding nieuwe klant" heeft nu de status "In beoordeling".', true, now() - interval '1212521 seconds'),
+    ('n8', 'm1', 'v2', 'sw8', null, 'Je voorstel "Standaard checklist voor onboarding nieuwe klant" heeft nu de status "Goedgekeurd".', true, now() - interval '1208921 seconds'),
+    ('n9', 'm1', 'v2', 'sw9', null, 'Je voorstel "Standaard checklist voor onboarding nieuwe klant" heeft nu de status "Ingepland". Toelichting: Ingepland op basis van beschikbare capaciteit.', true, now() - interval '607721 seconds'),
+    ('n10', 'm3', 'v3', 'sw10', null, 'Bedankt! Je voorstel "Verouderde firewall-firmware bij klant" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '798521 seconds'),
+    ('n11', 'm3', 'v3', 'sw11', null, 'Je voorstel "Verouderde firewall-firmware bij klant" heeft nu de status "In beoordeling".', true, now() - interval '607721 seconds'),
+    ('n12', 'm2', 'v4', 'sw12', null, 'Bedankt! Je voorstel "Automatische rapportage licentiegebruik M365" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '1057721 seconds'),
+    ('n13', 'm2', 'v4', 'sw13', null, 'Je voorstel "Automatische rapportage licentiegebruik M365" heeft nu de status "In beoordeling".', true, now() - interval '607721 seconds'),
+    ('n14', 'm2', 'v4', 'sw14', null, 'Je voorstel "Automatische rapportage licentiegebruik M365" heeft nu de status "On hold". Toelichting: Goed idee, maar eerst capaciteit vrijmaken in Q1.', true, now() - interval '604121 seconds'),
+    ('n15', 'm3', 'v5', 'sw15', null, 'Bedankt! Je voorstel "Koffieautomaat vervangen" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '1316921 seconds'),
+    ('n16', 'm3', 'v5', 'sw16', null, 'Je voorstel "Koffieautomaat vervangen" heeft nu de status "Afgewezen". Toelichting: Hoort niet in deze registratie; graag melden bij facilitair.', true, now() - interval '1212521 seconds'),
+    ('n17', 'm1', 'v6', 'sw17', null, 'Bedankt! Je voorstel "Wachtwoordbeleid servicedesk-accounts aanscherpen" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', true, now() - interval '884921 seconds'),
+    ('n18', 'm2', 'v7', 'sw18', null, 'Bedankt! Je voorstel "Kennisbankartikel voor veelvoorkomende printerstoring" is ontvangen. De stuurgroep beoordeelt het in het eerstvolgende wekelijkse overleg.', false, now() - interval '193721 seconds'),
+    ('n19', 'm3', 'v3', null, 'r1', 'Arjen Fiechter reageerde bij "Verouderde firewall-firmware bij klant".', true, now() - interval '618521 seconds'),
+    ('n20', 'm4', 'v3', null, 'r2', 'AnneMirthe Roelofsen reageerde bij "Verouderde firewall-firmware bij klant".', true, now() - interval '611321 seconds'),
+    ('n21', 'm5', 'v3', null, 'r2', 'AnneMirthe Roelofsen reageerde bij "Verouderde firewall-firmware bij klant".', true, now() - interval '611321 seconds'),
+    ('n22', 'm1', 'v6', null, 'r3', 'Olaf van Heeswijk reageerde bij "Wachtwoordbeleid servicedesk-accounts aanscherpen".', false, now() - interval '103721 seconds');
   perform setval('voorstel_nr', 7);
   perform setval('beoordeling_nr', 4);
   perform setval('statuswijziging_nr', 18);
-  perform setval('notificatie_nr', 18);
+  perform setval('notificatie_nr', 22);
+  perform setval('reactie_nr', 3);
 end $$;
 
 -- "Demodata herstellen" in de app: iedere ingelogde gebruiker mag dit (alleen bedoeld voor de demo).
@@ -330,11 +408,12 @@ end $$;
 -- =============================================================================
 -- (Supabase geeft standaard rechten aan anon en authenticated; die halen we eerst weg.)
 revoke all on all functions in schema public from public, anon, authenticated;
-revoke all on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie from anon, authenticated;
+revoke all on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie, reactie from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
-grant select on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie to authenticated;
+grant select on medewerker, categorie, voorstel, beoordeling, statuswijziging, notificatie, reactie to authenticated;
 grant execute on function huidige_medewerker(), dien_voorstel_in(text, text, text, text, text), sla_beoordeling_op(text, text, text, text, text, text),
-  wijzig_status(text, text, text), markeer_gelezen(text[]), reset_demo() to authenticated;
+  wijzig_status(text, text, text), markeer_gelezen(text[]), reset_demo(),
+  mag_gesprek_zien(text), plaats_reactie(text, text), bewerk_reactie(text, text) to authenticated;
 
 -- =============================================================================
 -- 6. Live updates: wijzigingen direct naar alle open schermen sturen
@@ -342,7 +421,7 @@ grant execute on function huidige_medewerker(), dien_voorstel_in(text, text, tex
 do $$
 declare t text;
 begin
-  foreach t in array array['voorstel','beoordeling','statuswijziging','notificatie'] loop
+  foreach t in array array['voorstel','beoordeling','statuswijziging','notificatie','reactie'] loop
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
       execute format('alter publication supabase_realtime add table %I', t);
     end if;

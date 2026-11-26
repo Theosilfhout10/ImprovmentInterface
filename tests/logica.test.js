@@ -127,14 +127,70 @@ test('R4 dashboard: telt totalen en signaleert voorstellen die te lang wachten',
 test('Datamodel: demodata is referentieel consistent (geen verwijzingen naar niet-bestaande records)', () => {
   const d = maakDemodata(NU);
   const ids = lijst => new Set(lijst.map(x => x.id));
-  const m = ids(d.medewerkers), c = ids(d.categorieen), v = ids(d.voorstellen), s = ids(d.statuswijzigingen);
+  const m = ids(d.medewerkers), c = ids(d.categorieen), v = ids(d.voorstellen), s = ids(d.statuswijzigingen), r = ids(d.reacties);
   d.voorstellen.forEach(x => { assert.ok(m.has(x.indienerId)); assert.ok(c.has(x.categorieId)); });
   d.beoordelingen.forEach(x => { assert.ok(v.has(x.voorstelId)); assert.ok(m.has(x.beoordelaarId)); });
   d.statuswijzigingen.forEach(x => { assert.ok(v.has(x.voorstelId)); assert.ok(m.has(x.doorId)); });
-  d.notificaties.forEach(x => { assert.ok(v.has(x.voorstelId)); assert.ok(m.has(x.ontvangerId)); assert.ok(s.has(x.statuswijzigingId)); });
+  d.reacties.forEach(x => { assert.ok(v.has(x.voorstelId)); assert.ok(m.has(x.afzenderId)); });
+  // Elke notificatie hoort bij precies één aanleiding: een statuswijziging óf een reactie.
+  d.notificaties.forEach(x => {
+    assert.ok(v.has(x.voorstelId)); assert.ok(m.has(x.ontvangerId));
+    assert.ok(x.statuswijzigingId ? s.has(x.statuswijzigingId) && !x.reactieId : r.has(x.reactieId));
+  });
   assert.equal(new Set(d.beoordelingen.map(b => b.id)).size, d.beoordelingen.length);
 });
 test('Hulpfunctie isoWeek geeft het ISO-weeknummer', () => {
   assert.equal(VBR.isoWeek(new Date(2026, 10, 25)), '2026-W48');
   assert.equal(VBR.isoWeek(new Date(2027, 0, 1)), '2026-W53');
+});
+
+// ---- Iteratie 5: gesprek per voorstel (R5) ----------------------------------
+const MIN = 60000;
+
+test('R7 gesprek: alleen de indiener en de stuurgroep zien het gesprek', () => {
+  const d = maakDemodata(NU);           // v3 is ingediend door m3
+  assert.equal(VBR.magGesprekZien(d, 'v3', 'm3'), true);   // indiener
+  assert.equal(VBR.magGesprekZien(d, 'v3', 'm4'), true);   // stuurgroep
+  assert.equal(VBR.magGesprekZien(d, 'v3', 'm1'), false);  // andere medewerker
+  assert.equal(VBR.magGesprekZien(d, 'v3', 'm6'), false);  // management
+});
+test('R7 gesprek: indiener reageert, de hele stuurgroep krijgt een melding', () => {
+  const d = maakDemodata(NU);
+  const { reactie, notificaties } = VBR.plaatsReactie(d, 'v3', '  Aanvulling: het gaat om twee firewalls.  ', 'm3', NU);
+  assert.equal(reactie.tekst, 'Aanvulling: het gaat om twee firewalls.');
+  assert.equal(reactie.bewerktOp, null);
+  assert.deepEqual(notificaties.map(n => n.ontvangerId).sort(), ['m4', 'm5']);
+  assert.ok(notificaties.every(n => n.reactieId === reactie.id && !n.gelezen));
+});
+test('R7 gesprek: stuurgroep reageert, alleen de indiener krijgt een melding', () => {
+  const d = maakDemodata(NU);
+  const { notificaties } = VBR.plaatsReactie(d, 'v3', 'Dank, dat helpt.', 'm4', NU);
+  assert.deepEqual(notificaties.map(n => n.ontvangerId), ['m3']);
+});
+test('R7 gesprek: andere medewerkers en management kunnen niet reageren', () => {
+  const d = maakDemodata(NU);
+  assert.throws(() => VBR.plaatsReactie(d, 'v3', 'Mag ik meepraten?', 'm1', NU), /Alleen de indiener en de stuurgroep/);
+  assert.throws(() => VBR.plaatsReactie(d, 'v3', 'Even meelezen', 'm6', NU), /Alleen de indiener en de stuurgroep/);
+});
+test('R7 gesprek: leeg of te lang bericht wordt geweigerd', () => {
+  const d = maakDemodata(NU);
+  assert.throws(() => VBR.plaatsReactie(d, 'v3', '   ', 'm3', NU), /Typ eerst een bericht/);
+  assert.throws(() => VBR.plaatsReactie(d, 'v3', 'x'.repeat(1001), 'm3', NU), /maximaal 1000 tekens/);
+  assert.doesNotThrow(() => VBR.plaatsReactie(d, 'v3', 'x'.repeat(1000), 'm3', NU));
+});
+test('R7 gesprek: eigen bericht bewerken kan tot 15 minuten na verzenden', () => {
+  const d = maakDemodata(NU);
+  const { reactie } = VBR.plaatsReactie(d, 'v3', 'Eerste versie', 'm3', NU);
+  const b = VBR.bewerkReactie(d, reactie.id, 'Tweede versie', 'm3', new Date(NU.getTime() + 15 * MIN));
+  assert.equal(b.tekst, 'Tweede versie');
+  assert.ok(b.bewerktOp);
+  assert.throws(() => VBR.bewerkReactie(d, reactie.id, 'Te laat', 'm3', new Date(NU.getTime() + 16 * MIN)), /tot 15 minuten/);
+  assert.throws(() => VBR.bewerkReactie(d, reactie.id, 'Niet van mij', 'm4', NU), /eigen berichten/);
+  assert.equal(d.reacties.find(r => r.id === reactie.id).tekst, 'Tweede versie');
+});
+test('R7 gesprek: werkt ook met oude data zonder reacties (bestaand databestand)', () => {
+  const d = maakDemodata(NU);
+  delete d.reacties;
+  const { reactie } = VBR.plaatsReactie(d, 'v3', 'Eerste reactie', 'm3', NU);
+  assert.equal(reactie.id, 'r1');
 });

@@ -4,8 +4,9 @@
  * Dit bestand bevat ALLEEN de regels van het proces, zonder schermen.
  * Daardoor is het los te testen (zie tests/logica.test.js) en makkelijk uit te leggen.
  *
- * Datamodel (6 entiteiten, zie ERD in de documentatie):
- *   Medewerker, Categorie, Voorstel, Beoordeling, Statuswijziging, Notificatie
+ * Datamodel (7 entiteiten, zie ERD in de documentatie):
+ *   Medewerker, Categorie, Voorstel, Beoordeling, Statuswijziging, Notificatie, Reactie
+ *   (Reactie is in iteratie 5 toegevoegd: het gesprek tussen indiener en stuurgroep per voorstel.)
  */
 (function (root) {
   'use strict';
@@ -213,6 +214,78 @@
     return b;
   }
 
+  // ---- Gesprek per voorstel (iteratie 5) --------------------------------------
+
+  /** Maximale lengte van één reactie en hoe lang je een eigen reactie nog mag bewerken. */
+  const MAX_REACTIE_TEKENS = 1000;
+  const BEWERK_MINUTEN = 15;
+
+  /**
+   * Het gesprek bij een voorstel is privé tussen de indiener en de stuurgroep (de behandelaar).
+   * Management en andere medewerkers zien het niet, tenzij ze zelf de indiener zijn.
+   */
+  function magGesprekZien(data, voorstelId, medewerkerId) {
+    const v = data.voorstellen.find(x => x.id === voorstelId);
+    const m = data.medewerkers.find(x => x.id === medewerkerId);
+    return !!(v && m && (v.indienerId === m.id || m.rol === 'stuurgroep'));
+  }
+
+  function controleerReactieTekst(tekst) {
+    const t = (tekst || '').trim();
+    if (!t) throw new Error('Typ eerst een bericht.');
+    if (t.length > MAX_REACTIE_TEKENS) throw new Error(`Een bericht mag maximaal ${MAX_REACTIE_TEKENS} tekens zijn.`);
+    return t;
+  }
+
+  /**
+   * Plaatst een reactie in het gesprek en maakt AUTOMATISCH een notificatie voor de andere partij:
+   *  - schrijft de indiener, dan krijgen alle stuurgroepleden een melding;
+   *  - schrijft de stuurgroep, dan krijgt de indiener een melding.
+   * Wie zelf schrijft, krijgt nooit een melding van zijn eigen bericht.
+   * @returns {{reactie:object, notificaties:object[]}}
+   */
+  function plaatsReactie(data, voorstelId, tekst, afzenderId, nu) {
+    if (!data.reacties) data.reacties = [];
+    const voorstel = data.voorstellen.find(v => v.id === voorstelId);
+    if (!voorstel) throw new Error('Voorstel niet gevonden.');
+    if (!magGesprekZien(data, voorstelId, afzenderId)) throw new Error('Alleen de indiener en de stuurgroep kunnen in dit gesprek reageren.');
+    const t = controleerReactieTekst(tekst);
+    const tijd = (nu || new Date()).toISOString();
+    const reactie = { id: nieuwId('r', data.reacties), voorstelId, afzenderId, tekst: t, verzondenOp: tijd, bewerktOp: null };
+    data.reacties.push(reactie);
+
+    const ontvangers = (afzenderId === voorstel.indienerId
+      ? data.medewerkers.filter(m => m.rol === 'stuurgroep').map(m => m.id)
+      : [voorstel.indienerId]).filter(id => id !== afzenderId);
+    const afzender = data.medewerkers.find(m => m.id === afzenderId);
+    const notificaties = ontvangers.map(ontvangerId => {
+      const n = {
+        id: nieuwId('n', data.notificaties), ontvangerId, voorstelId, statuswijzigingId: null, reactieId: reactie.id,
+        bericht: `${afzender.naam} reageerde bij "${voorstel.titel}".`, gelezen: false, datum: tijd,
+      };
+      data.notificaties.push(n);
+      return n;
+    });
+    return { reactie, notificaties };
+  }
+
+  /** Mag deze medewerker deze reactie nu nog bewerken? Alleen je eigen reactie, tot 15 minuten na verzenden. */
+  function magReactieBewerken(reactie, medewerkerId, nu) {
+    const verstreken = (nu || new Date()).getTime() - new Date(reactie.verzondenOp).getTime();
+    return reactie.afzenderId === medewerkerId && verstreken <= BEWERK_MINUTEN * 60000;
+  }
+
+  /** Bewerkt een eigen reactie (binnen 15 minuten). Verwijderen kan bewust niet: het gesprek blijft een betrouwbaar verslag. */
+  function bewerkReactie(data, reactieId, tekst, doorId, nu) {
+    const reactie = (data.reacties || []).find(r => r.id === reactieId);
+    if (!reactie) throw new Error('Bericht niet gevonden.');
+    if (reactie.afzenderId !== doorId) throw new Error('Je kunt alleen je eigen berichten bewerken.');
+    if (!magReactieBewerken(reactie, doorId, nu)) throw new Error(`Bewerken kan tot ${BEWERK_MINUTEN} minuten na verzenden.`);
+    reactie.tekst = controleerReactieTekst(tekst);
+    reactie.bewerktOp = (nu || new Date()).toISOString();
+    return reactie;
+  }
+
   // ---- Dashboard -------------------------------------------------------------
 
   /** Verzamelt de kengetallen voor het management-dashboard (kernfunctionaliteit 3). */
@@ -276,6 +349,7 @@
     NIVEAUS, STATUSSEN, OVERGANGEN, OPEN_STATUSSEN, MAX_DAGEN_ZONDER_REACTIE,
     berekenPrioriteit, valideerVoorstel, magOvergaan, controleerStuurgroep, wijzigStatus, dienVoorstelIn,
     slaBeoordelingOp, dashboardCijfers, nieuwId, isoWeek,
+    MAX_REACTIE_TEKENS, BEWERK_MINUTEN, magGesprekZien, plaatsReactie, magReactieBewerken, bewerkReactie,
   };
 
   // Werkt zowel in de browser (window.VBR) als in Node (voor de tests).

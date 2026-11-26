@@ -15,7 +15,7 @@ Verbeterideeën over klantomgevingen, interne processen en beveiliging worden al
 4. Management bekijkt het dashboard: aantallen per status, categorie en prioriteit, reactietijd en wat te lang blijft liggen.
 
 ## Data
-Max. 6 entiteiten: Medewerker, Categorie, Voorstel, Beoordeling, Statuswijziging, Notificatie (zie [ontwerp.md](ontwerp.md)). Alleen fictieve demodata, geen productie- of klantgegevens.
+Max. 6 entiteiten: Medewerker, Categorie, Voorstel, Beoordeling, Statuswijziging, Notificatie (zie [ontwerp.md](ontwerp.md)). Iteratie 5: bewust een 7e entiteit Reactie voor het gesprek per voorstel, afgestemd met Theo (zie [iteratielog](iteratielog.md)). Alleen fictieve demodata, geen productie- of klantgegevens.
 
 ## Randvoorwaarden
 - Nederlandstalig, eenvoudige navigatie, werkt op laptop en telefoon, donkere modus.
