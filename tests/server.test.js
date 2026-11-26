@@ -33,7 +33,7 @@ test('API: data ophalen geeft demodata en mailstand "voorbeeld"', async () => {
   const s = await startServer();
   const r = await s.api('GET', '/api/data');
   assert.equal(r.status, 200);
-  assert.equal(r.json.data.voorstellen.length, 7);
+  assert.equal(r.json.data.voorstellen.length, 10);
   assert.equal(r.json.mail.stand, 'voorbeeld');
   await s.stop();
 });
@@ -67,7 +67,7 @@ test('R2 API: statuswijziging door de stuurgroep mailt de indiener met de toelic
 
 test('NF2 API: medewerker kan geen status wijzigen; onbekende gebruiker wordt geweigerd', async () => {
   const s = await startServer();
-  const r1 = await s.api('POST', '/api/voorstellen/v6/status', 'm1', { naar: 'In beoordeling' });
+  const r1 = await s.api('POST', '/api/voorstellen/v8/status', 'm1', { naar: 'In beoordeling' });
   assert.equal(r1.status, 400);
   assert.match(r1.json.fout, /Alleen de stuurgroep/);
   const r2 = await s.api('POST', '/api/voorstellen', 'onbekend', geldig);
@@ -78,10 +78,10 @@ test('NF2 API: medewerker kan geen status wijzigen; onbekende gebruiker wordt ge
 test('Opslag: een geweigerde wijziging laat geen halve data achter', async () => {
   const s = await startServer();
   const voor = fs.readFileSync(s.bestand, 'utf8');
-  const r = await s.api('POST', '/api/voorstellen/v6/status', 'm4', { naar: 'Afgewezen', toelichting: '' });
+  const r = await s.api('POST', '/api/voorstellen/v8/status', 'm4', { naar: 'Afgewezen', toelichting: '' });
   assert.equal(r.status, 400);
   assert.equal(fs.readFileSync(s.bestand, 'utf8'), voor);
-  assert.equal((await s.api('GET', '/api/data')).json.data.voorstellen.find(v => v.id === 'v6').status, 'Ingediend');
+  assert.equal((await s.api('GET', '/api/data')).json.data.voorstellen.find(v => v.id === 'v8').status, 'Ingediend');
   await s.stop();
 });
 
@@ -107,14 +107,14 @@ test('Mail: zonder Gmail-instellingen staat de mailer in voorbeeldstand', () => 
 
 test('R7 API: gesprek per voorstel, met meldingen en bewerken', async () => {
   const s = await startServer();
-  const r = await s.api('POST', '/api/voorstellen/v3/reacties', 'm4', { tekst: 'Welke versie draait er nu?' });
+  const r = await s.api('POST', '/api/voorstellen/v5/reacties', 'm4', { tekst: 'Welke versie draait er nu?' });
   assert.equal(r.status, 200);
   const data = (await s.api('GET', '/api/data')).json.data;
   assert.ok(data.notificaties.some(n => n.reactieId === r.json.reactie.id && n.ontvangerId === 'm3'));
   const bewerkt = await s.api('PUT', `/api/reacties/${r.json.reactie.id}`, 'm4', { tekst: 'Welke firmwareversie draait er nu?' });
   assert.equal(bewerkt.status, 200);
   assert.ok(bewerkt.json.reactie.bewerktOp);
-  const vreemd = await s.api('POST', '/api/voorstellen/v3/reacties', 'm1', { tekst: 'Mag ik meepraten?' });
+  const vreemd = await s.api('POST', '/api/voorstellen/v5/reacties', 'm1', { tekst: 'Mag ik meepraten?' });
   assert.equal(vreemd.status, 400);
   assert.match(vreemd.json.fout, /Alleen de indiener en de stuurgroep/);
   assert.equal((await s.api('PUT', `/api/reacties/${r.json.reactie.id}`, 'm3', { tekst: 'x' })).status, 400);

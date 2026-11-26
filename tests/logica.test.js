@@ -109,18 +109,18 @@ test('Performance: dashboard met 1.000 voorstellen rekent binnen 1 seconde', () 
   for (let i = 0; i < 1000; i++) VBR.dienVoorstelIn(d, { ...geldig, titel: 'Voorstel ' + i }, 'm1', NU);
   const start = Date.now();
   const c = VBR.dashboardCijfers(d, NU);
-  assert.equal(c.totaal, 1007);
+  assert.equal(c.totaal, 1010);
   assert.ok(Date.now() - start < 1000);
 });
 
 test('R4 dashboard: telt totalen en signaleert voorstellen die te lang wachten', () => {
   const d = maakDemodata(NU);
   const c = VBR.dashboardCijfers(d, NU);
-  assert.equal(c.totaal, 7);
-  assert.equal(c.afgerond, 1);
+  assert.equal(c.totaal, 10);
+  assert.equal(c.afgerond, 2);
   assert.equal(c.afgewezen, 1);
-  assert.equal(c.open, 5);
-  assert.deepEqual(c.teLangOpen.map(v => v.id), ['v6']); // 10 dagen zonder reactie
+  assert.equal(c.open, 7);
+  assert.deepEqual(c.teLangOpen.map(v => v.id), ['v8']); // 10 dagen zonder reactie
   assert.ok(c.gemReactieDagen > 0);
 });
 
@@ -148,15 +148,15 @@ test('Hulpfunctie isoWeek geeft het ISO-weeknummer', () => {
 const MIN = 60000;
 
 test('R7 gesprek: alleen de indiener en de stuurgroep zien het gesprek', () => {
-  const d = maakDemodata(NU);           // v3 is ingediend door m3
-  assert.equal(VBR.magGesprekZien(d, 'v3', 'm3'), true);   // indiener
-  assert.equal(VBR.magGesprekZien(d, 'v3', 'm4'), true);   // stuurgroep
-  assert.equal(VBR.magGesprekZien(d, 'v3', 'm1'), false);  // andere medewerker
-  assert.equal(VBR.magGesprekZien(d, 'v3', 'm6'), false);  // management
+  const d = maakDemodata(NU);           // v5 is ingediend door m3
+  assert.equal(VBR.magGesprekZien(d, 'v5', 'm3'), true);   // indiener
+  assert.equal(VBR.magGesprekZien(d, 'v5', 'm4'), true);   // stuurgroep
+  assert.equal(VBR.magGesprekZien(d, 'v5', 'm1'), false);  // andere medewerker
+  assert.equal(VBR.magGesprekZien(d, 'v5', 'm6'), false);  // management
 });
 test('R7 gesprek: indiener reageert, de hele stuurgroep krijgt een melding', () => {
   const d = maakDemodata(NU);
-  const { reactie, notificaties } = VBR.plaatsReactie(d, 'v3', '  Aanvulling: het gaat om twee firewalls.  ', 'm3', NU);
+  const { reactie, notificaties } = VBR.plaatsReactie(d, 'v5', '  Aanvulling: het gaat om twee firewalls.  ', 'm3', NU);
   assert.equal(reactie.tekst, 'Aanvulling: het gaat om twee firewalls.');
   assert.equal(reactie.bewerktOp, null);
   assert.deepEqual(notificaties.map(n => n.ontvangerId).sort(), ['m4', 'm5']);
@@ -164,23 +164,23 @@ test('R7 gesprek: indiener reageert, de hele stuurgroep krijgt een melding', () 
 });
 test('R7 gesprek: stuurgroep reageert, alleen de indiener krijgt een melding', () => {
   const d = maakDemodata(NU);
-  const { notificaties } = VBR.plaatsReactie(d, 'v3', 'Dank, dat helpt.', 'm4', NU);
+  const { notificaties } = VBR.plaatsReactie(d, 'v5', 'Dank, dat helpt.', 'm4', NU);
   assert.deepEqual(notificaties.map(n => n.ontvangerId), ['m3']);
 });
 test('R7 gesprek: andere medewerkers en management kunnen niet reageren', () => {
   const d = maakDemodata(NU);
-  assert.throws(() => VBR.plaatsReactie(d, 'v3', 'Mag ik meepraten?', 'm1', NU), /Alleen de indiener en de stuurgroep/);
-  assert.throws(() => VBR.plaatsReactie(d, 'v3', 'Even meelezen', 'm6', NU), /Alleen de indiener en de stuurgroep/);
+  assert.throws(() => VBR.plaatsReactie(d, 'v5', 'Mag ik meepraten?', 'm1', NU), /Alleen de indiener en de stuurgroep/);
+  assert.throws(() => VBR.plaatsReactie(d, 'v5', 'Even meelezen', 'm6', NU), /Alleen de indiener en de stuurgroep/);
 });
 test('R7 gesprek: leeg of te lang bericht wordt geweigerd', () => {
   const d = maakDemodata(NU);
-  assert.throws(() => VBR.plaatsReactie(d, 'v3', '   ', 'm3', NU), /Typ eerst een bericht/);
-  assert.throws(() => VBR.plaatsReactie(d, 'v3', 'x'.repeat(1001), 'm3', NU), /maximaal 1000 tekens/);
-  assert.doesNotThrow(() => VBR.plaatsReactie(d, 'v3', 'x'.repeat(1000), 'm3', NU));
+  assert.throws(() => VBR.plaatsReactie(d, 'v5', '   ', 'm3', NU), /Typ eerst een bericht/);
+  assert.throws(() => VBR.plaatsReactie(d, 'v5', 'x'.repeat(1001), 'm3', NU), /maximaal 1000 tekens/);
+  assert.doesNotThrow(() => VBR.plaatsReactie(d, 'v5', 'x'.repeat(1000), 'm3', NU));
 });
 test('R7 gesprek: eigen bericht bewerken kan tot 15 minuten na verzenden', () => {
   const d = maakDemodata(NU);
-  const { reactie } = VBR.plaatsReactie(d, 'v3', 'Eerste versie', 'm3', NU);
+  const { reactie } = VBR.plaatsReactie(d, 'v5', 'Eerste versie', 'm3', NU);
   const b = VBR.bewerkReactie(d, reactie.id, 'Tweede versie', 'm3', new Date(NU.getTime() + 15 * MIN));
   assert.equal(b.tekst, 'Tweede versie');
   assert.ok(b.bewerktOp);
@@ -191,20 +191,20 @@ test('R7 gesprek: eigen bericht bewerken kan tot 15 minuten na verzenden', () =>
 test('R7 gesprek: werkt ook met oude data zonder reacties (bestaand databestand)', () => {
   const d = maakDemodata(NU);
   delete d.reacties;
-  const { reactie } = VBR.plaatsReactie(d, 'v3', 'Eerste reactie', 'm3', NU);
+  const { reactie } = VBR.plaatsReactie(d, 'v5', 'Eerste reactie', 'm3', NU);
   assert.equal(reactie.id, 'r1');
 });
 
 // ---- Iteratie 5b: tab Gesprekken ----------------------------------------------
 test('R7 tab Gesprekken: alleen gesprekken waar je deelnemer van bent, nieuwste bovenaan', () => {
-  const d = maakDemodata(NU);                  // demo: gesprekken bij v3 (indiener m3) en v6 (indiener m1)
+  const d = maakDemodata(NU);                  // demo: gesprekken bij v4 (m2), v5 (m3) en v6 (m1)
   assert.deepEqual(VBR.gesprekkenVoor(d, 'm1').map(g => g.voorstel.id), ['v6']);       // alleen eigen voorstel
-  assert.deepEqual(VBR.gesprekkenVoor(d, 'm3').map(g => g.voorstel.id), ['v3']);
-  assert.deepEqual(VBR.gesprekkenVoor(d, 'm4').map(g => g.voorstel.id), ['v6', 'v3']); // stuurgroep: alle, nieuwste eerst
+  assert.deepEqual(VBR.gesprekkenVoor(d, 'm3').map(g => g.voorstel.id), ['v5']);
+  assert.deepEqual(VBR.gesprekkenVoor(d, 'm4').map(g => g.voorstel.id), ['v6', 'v4', 'v5']); // stuurgroep: alle, nieuwste eerst
   assert.deepEqual(VBR.gesprekkenVoor(d, 'm6'), []);                                   // management: geen eigen gesprekken
-  const v3 = VBR.gesprekkenVoor(d, 'm4').find(g => g.voorstel.id === 'v3');
-  assert.equal(v3.aantal, 2);
-  assert.equal(v3.laatste.afzenderId, 'm3');
-  VBR.plaatsReactie(d, 'v3', 'Nog een vraag', 'm5', new Date(NU.getTime() + 60000));
-  assert.equal(VBR.gesprekkenVoor(d, 'm4')[0].voorstel.id, 'v3');                       // nieuw bericht schuift naar boven
+  const v5 = VBR.gesprekkenVoor(d, 'm4').find(g => g.voorstel.id === 'v5');
+  assert.equal(v5.aantal, 2);
+  assert.equal(v5.laatste.afzenderId, 'm3');
+  VBR.plaatsReactie(d, 'v5', 'Nog een vraag', 'm5', new Date(NU.getTime() + 60000));
+  assert.equal(VBR.gesprekkenVoor(d, 'm4')[0].voorstel.id, 'v5');                       // nieuw bericht schuift naar boven
 });

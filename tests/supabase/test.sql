@@ -81,15 +81,15 @@ do $$ declare vid text := current_setting('vbr.test_voorstel'); r reactie; begin
   if r.tekst <> 'Is er al iets bekend over de planning?' or r.afzender_id <> 'm1' or r.bewerkt_op is not null then raise exception 'Reactie fout opgeslagen'; end if;
   perform set_config('vbr.test_reactie', r.id, false);
   -- De indiener ziet het gesprek bij een voorstel van iemand anders niet
-  if exists (select 1 from reactie where voorstel_id = 'v3') then raise exception 'Gesprek van een ander voorstel zichtbaar'; end if;
+  if exists (select 1 from reactie where voorstel_id = 'v5') then raise exception 'Gesprek van een ander voorstel zichtbaar'; end if;
   r := bewerk_reactie(r.id, 'Is er al iets bekend over de planning van dit voorstel?');
   if r.bewerkt_op is null or r.tekst not like '%van dit voorstel%' then raise exception 'Bewerken fout'; end if;
   raise notice 'OK R7 indiener reageert en bewerkt binnen 15 minuten; ziet geen gesprekken van anderen';
 end $$;
-select pg_temp.verwacht_fout($$select plaats_reactie('v3', 'Mag ik meepraten?')$$, 'Alleen de indiener en de stuurgroep');
+select pg_temp.verwacht_fout($$select plaats_reactie('v5', 'Mag ik meepraten?')$$, 'Alleen de indiener en de stuurgroep');
 select pg_temp.verwacht_fout(format($$select plaats_reactie(%L, '   ')$$, current_setting('vbr.test_voorstel')), 'Typ eerst een bericht');
 select pg_temp.verwacht_fout(format($$select plaats_reactie(%L, repeat('x', 1001))$$, current_setting('vbr.test_voorstel')), 'maximaal 1000 tekens');
-select pg_temp.verwacht_fout($$insert into reactie (voorstel_id, afzender_id, tekst) values ('v3', 'm1', 'x')$$, 'permission denied');
+select pg_temp.verwacht_fout($$insert into reactie (voorstel_id, afzender_id, tekst) values ('v5', 'm1', 'x')$$, 'permission denied');
 select pg_temp.verwacht_fout(format($$update reactie set tekst = 'x' where id = %L$$, current_setting('vbr.test_reactie')), 'permission denied');
 reset role;
 do $$ declare vid text := current_setting('vbr.test_voorstel'); begin
@@ -99,7 +99,7 @@ end $$;
 
 select pg_temp.als('00000000-0000-0000-0000-000000000004');
 do $$ declare vid text := current_setting('vbr.test_voorstel'); r reactie; begin
-  if (select count(*) from reactie where voorstel_id = 'v3') <> 2 then raise exception 'Stuurgroep ziet niet alle gesprekken'; end if;
+  if (select count(*) from reactie where voorstel_id = 'v5') <> 2 then raise exception 'Stuurgroep ziet niet alle gesprekken'; end if;
   r := plaats_reactie(vid, 'Ja, hij staat gepland voor week 50.');
   perform set_config('vbr.test_reactie2', r.id, false);
   begin perform bewerk_reactie(current_setting('vbr.test_reactie'), 'Gekaapt'); raise exception 'Bericht van een ander bewerken mocht';
@@ -148,13 +148,13 @@ do $$ begin
   perform markeer_gelezen();
   if exists (select 1 from notificatie where not gelezen) then raise exception 'Niet alles gelezen'; end if;
   perform reset_demo();
-  if (select count(*) from voorstel) <> 7 then raise exception 'Reset fout'; end if;
+  if (select count(*) from voorstel) <> 10 then raise exception 'Reset fout'; end if;
   raise notice 'OK markeer gelezen en demo resetten';
 end $$;
 reset role;
 do $$ declare v voorstel; begin
   perform pg_temp.als('00000000-0000-0000-0000-000000000001');
   v := dien_voorstel_in('Na reset indienen', 'Nieuwe id mag niet botsen met de demodata.', 'c2');
-  if v.id <> 'v8' then raise exception 'Volgnummer na reset fout: %', v.id; end if;
+  if v.id <> 'v11' then raise exception 'Volgnummer na reset fout: %', v.id; end if;
   raise notice 'OK volgnummers na reset';
 end $$;
